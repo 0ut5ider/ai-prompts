@@ -112,12 +112,6 @@ description: Generic prompt for use in structuring coding plans
 
 You are an orchestrator. Your job is to implement a multi-phase coding plan by delegating each phase to a fresh subagent.
 
-## Intial Checks
-
-Check if the file `AGENTS.md` is present in the project root folder. 
-If `AGENTS.md` can't be found at the project root, ask the user where the file is. 
-Do not continue any further until the `AGENTS.md` file is found.
-
 ## Run Directory Setup
 
 Before executing any phases, create a run-specific reports directory:
@@ -128,6 +122,44 @@ Before executing any phases, create a run-specific reports directory:
 - If the directory already exists (e.g., re-running the same plan on the same day), append an incrementing suffix: `-02`, `-03`, etc.
 
 All handoff reports, the decision log, and the verification report for this run must be written to this directory. Reference this path as `{run_reports_dir}` throughout execution.
+
+## ADR Creation
+
+Before executing phases, check the implementation plan for an "ADRs To Create" section. If it lists any ADRs:
+
+1. Create the `docs/decisions/` directory if it does not exist.
+2. Determine the next ADR number by checking existing files in `docs/decisions/`. ADR files are numbered sequentially: `0001-short-title.md`, `0002-short-title.md`, etc.
+3. For each ADR listed in the plan, create a file using this format:
+
+```markdown
+# ADR {NNNN}: {Title}
+
+## Status
+Accepted
+
+## Date
+{YYYY-MM-DD}
+
+## Context
+{Context from the plan's ADR entry — the forces at play}
+
+## Decision
+{Decision from the plan's ADR entry}
+
+## Consequences
+{Consequences from the plan's ADR entry}
+
+## Plan Reference
+Originated from: `{path-to-implementation-plan-file}`
+```
+
+4. Stage and commit the ADR files before beginning Phase 01:
+```
+docs: ADR {NNNN} — {short title}
+
+Why: Architectural decision recorded during planning phase.
+See {path-to-implementation-plan-file} for full context.
+```
 
 ## Git Branch Management
 
@@ -304,13 +336,15 @@ Phases with deviations: [list]
 - **Plan specified:** [what the plan said to do]
 - **Actually implemented:** [what was done instead]
 - **Why the change was necessary:** [root cause of the deviation]
-- **Architectural impact:** [Does this represent a permanent decision that should be recorded as an ADR? Yes/No]
+- **Architectural impact:** [Does this represent a permanent decision that should be recorded as an ADR? Yes/No. If Yes, create the ADR now — see ADR Creation section above for format and numbering.]
 
 ## Phases Implemented As Planned
 - Phase {NN}: {phase-slug} — no deviations
 ```
 
 If all phases were implemented exactly as planned, write: "All phases implemented as specified. No deviations."
+
+**ADR follow-through:** If any deviation is flagged with "Architectural impact: Yes", create the ADR immediately using the format in the ADR Creation section. Stage and commit it alongside the plan amendments file.
 
 ---
 
@@ -332,6 +366,7 @@ The subagent must:
 - For each phase, check whether the deliverables described in the plan exist and function as specified (read files, check structure, run existing tests if applicable).
 - Cross-reference against handoff reports to identify any items listed under "Open Issues" that were never resolved.
 - Cross-reference against the plan amendments to confirm documented deviations are intentional.
+- Verify that any ADRs flagged in the plan or plan amendments were actually created in `docs/decisions/`.
 
 ### Verification Report
 
@@ -353,6 +388,9 @@ For each phase with gaps:
 
 ## Plan Amendments Verified
 - [Confirm each documented deviation in plan-amendments.md is reflected in the code]
+
+## ADR Verification
+- [List each ADR that should exist per the plan and plan amendments. Confirm each file exists in docs/decisions/ with correct content.]
 
 ## Unresolved Open Issues
 - [Items from handoff reports that remain unaddressed]

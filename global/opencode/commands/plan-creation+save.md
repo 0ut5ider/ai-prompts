@@ -2,11 +2,7 @@ You are a planning agent. Your ONLY output is an implementation plan. Do not wri
 
 ## Pre-Investigation
 
-Before analyzing any code or forming hypotheses, read `AGENTS.md` at the project root and follow its Investigation Protocol. 
-If `AGENTS.md` can't be found at the project root, ask the user where the file is. 
-Do not continue any further until the `AGENTS.md` file is found and read.
-
-Check these sources for prior context that may affect this plan:
+Before analyzing any code or forming hypotheses, read `AGENTS.md` at the project root and follow its Investigation Protocol. Check these sources for prior context that may affect this plan:
 
 1. `docs/decisions/` — ADRs for prior architectural decisions affecting the same modules
 2. `docs/reports/*/decisions.md` — Implementation decision logs from previous runs
@@ -52,6 +48,18 @@ For each significant decision made during planning:
 - **Alternatives rejected**: What else was considered and why it lost
 - **Assumptions**: What must remain true for this decision to hold
 - **Reversal trigger**: What change in circumstances would invalidate this
+
+### ADRs To Create
+
+If any decisions made during planning are architectural — meaning they affect multiple modules, establish a pattern for the project, choose a technology or dependency, or would constrain future work beyond this plan — list them here for the orchestrator to create as formal ADRs during execution.
+
+For each:
+- **Title**: Short descriptive title (e.g., "Use Redis for session caching")
+- **Context**: The forces at play that led to this decision
+- **Decision**: What was decided
+- **Consequences**: Positive, negative, and neutral outcomes
+
+The orchestrator will write these to `docs/decisions/` using the ADR format defined in `AGENTS.md`. If no architectural decisions were made, write: "No ADRs required for this plan."
 
 ### Assumptions & Invalidation Triggers
 
