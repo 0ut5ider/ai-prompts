@@ -112,7 +112,14 @@ description: Generic prompt for use in structuring coding plans
 
 You are an orchestrator. Your job is to implement a multi-phase coding plan by delegating each phase to a fresh subagent.
 
+## Intial Checks
+
+Check if the file `AGENTS.md` is present in the project root folder. 
+If `AGENTS.md` can't be found at the project root, ask the user where the file is. 
+Do not continue any further until the `AGENTS.md` file is found.
+
 ## Run Directory Setup
+
 Before executing any phases, create a run-specific reports directory:
 
 **Path:** `{project_root}/docs/reports/{YYYY-MM-DD}-{plan-slug}/`
@@ -123,6 +130,7 @@ Before executing any phases, create a run-specific reports directory:
 All handoff reports, the decision log, and the verification report for this run must be written to this directory. Reference this path as `{run_reports_dir}` throughout execution.
 
 ## Git Branch Management
+
 Before executing any phases, verify the current git branch.
 
 1. **Check the current branch name.** If it reasonably matches the implementation plan's purpose (e.g., the branch is `feature/texture-pipeline` and the plan is about adding a texture pipeline), proceed on this branch.
@@ -134,6 +142,7 @@ Before executing any phases, verify the current git branch.
 3. **Never execute implementation phases on `main`, `master` or `develop` branch.** If the user explicitly asks you to, warn them and request confirmation a second time.
 
 ## Run Index
+
 After creating the run directory, append an entry to `{project_root}/docs/reports/index.md`. Create the file if it does not exist.
 
 **Format:**
@@ -154,28 +163,40 @@ Append one row per orchestrator run:
 ## Rules
 
 - Execute implementation plan phases or steps sequentially, one subagent per phase.
-- The implementation plan could contain either the term phases or steps. The terms can and shouold be used interchangebly throughout the instruction in this document. 
+- The implementation plan could contain either the term phases or steps. The terms can and should be used interchangeably throughout the instructions in this document.
 - Each subagent must start with a clean context — do not carry conversation history between phases/steps.
 - All completion reports and decision logs are stored in `{run_reports_dir}`.
 
 ## The Full Master Plan
-refer to the provided file for the implementation plan that should be followed.
+
+Refer to the provided file for the implementation plan that should be followed.
 
 ## What Each Subagent Receives
 
 1. **The AugsterSystemPrompt** — make sure the Augster System Prompt is passed to all the subagents.
 2. **The full master plan** — provide the complete plan so the subagent understands the broader context.
 3. **Phase scope constraint:** "You are executing Phase {NN} ONLY. Do not implement any work from subsequent phases. Stop when Phase {NN} deliverables are complete."
-4. **Previous handoff report:** Pass the file path to the most recent handoff report from `{project_root}/reports/`. Phase 01 will not have one — this is expected.
+4. **Previous handoff report:** Pass the file path to the most recent handoff report from `{run_reports_dir}`. Phase 01 will not have one — this is expected.
 5. **Test fixture path:** `../sample_model/LowPolyLowTexture-02` (sample .obj .mtl and texture .jpg file for validation).
+6. **Project context:** Instruct each subagent to read `AGENTS.md` at the project root before beginning work. This file contains project knowledge sources, code comment conventions, commit message conventions, and the decision recording threshold.
+7. **Code comment requirement:** When implementing something non-obvious — a workaround, a performance choice, a decision between alternatives — add an inline comment explaining why. Use these formats:
+   - `// Chosen over [alternative] because [reason]`
+   - `// Workaround for [issue]: [explanation]`
+   - `// WARNING: assumes [assumption] — if this changes, [consequence]`
+   Do not comment what the code does — only why it does it this way. If the implementation plan's phase includes a "Code comments required" section, follow those specific instructions.
 
 ## Phase Commits
+
 After each phase is complete and its handoff report is written, the subagent must stage and commit all changes from that phase.
 
 **Commit message format:**
 ```
 phase {NN}: {phase-slug}
-Why: {1-3 sentences explaining the reasoning, not just what changed}
+
+Why: {1-3 sentences explaining the reasoning behind this phase's
+approach — what problem it solved and any non-obvious choices made}
+
+Refs: {ADR number or decision log entry if applicable, omit if none}
 ```
 
 - Include all files created, modified, or deleted during the phase — code, tests, reports, and decision log entries.
@@ -197,7 +218,7 @@ After completing its phase, each subagent must be told to generate two outputs:
 
 ### 1. Handoff Report
 
-The handoff report is the agent to agent information passing of what one agent completed and pass context to the next agent.
+The handoff report is the agent-to-agent information passing of what one agent completed and passes context to the next agent.
 
 **Filename:** `YYYY-MM-DD-phase-{NN}-{phase-slug}.md`
 
@@ -217,6 +238,9 @@ Configuration changes: [if any]
 ## Decisions That Constrain Future Phases
 - [only decisions the next agent must respect, e.g., "JWT auth — middleware expects Bearer tokens"]
 
+## Patterns & Gotchas Discovered
+- [Anything learned during implementation that the plan didn't anticipate — surprising API behavior, performance characteristics, edge cases encountered in tests, code quirks in existing modules, etc.]
+
 ## Open Issues
 - [anything unfinished, known-broken, or deferred]
 
@@ -225,6 +249,8 @@ Configuration changes: [if any]
 ```
 
 Do not duplicate file contents into the report. Reference file paths instead.
+
+**Handoff validation:** Before proceeding to the next phase, verify the handoff report contains non-empty entries for all required sections. If "Decisions That Constrain Future Phases" or "Next Phase Input" are empty, confirm this is intentional rather than an oversight.
 
 ### 2. Decision Log Entry
 
@@ -242,28 +268,52 @@ Append an entry in this format:
 - [Decision]: [Reason].
 ```
 
-Only log decisions where:
+**Recording threshold:** Log any implementation decision where the reasoning isn't obvious from reading the code alone. This includes:
 
-- The approach deviated from the original plan.
-- Any choice where the reasoning isn't obvious from reading the code.
-- When in doubt, log it. A decision log that's too verbose is fixable; lost reasoning is not.
-- A meaningful trade-off was made between alternatives.
-- The reasoning would not be obvious from reading the code alone.
+- The approach deviated from the original plan
+- A meaningful trade-off was made between alternatives
+- A specific error handling strategy, data structure, or module structure was chosen for non-obvious reasons
+- A workaround was implemented for an external constraint
+- Something was tried and abandoned (document why)
 
-Do not log routine implementation choices. If no qualifying decisions were made, skip the entry.
+When uncertain whether a decision qualifies, log it. A verbose decision log costs the next agent a few hundred tokens; missing context costs a full re-investigation.
+
+If genuinely no qualifying decisions were made in a phase, write: "No non-obvious decisions made in this phase."
+
 ---
 
-### Plan Amendments
+## Plan Amendments
+
+After all phases are complete but before verification, produce a plan amendments document.
+
 **Filename:** `YYYY-MM-DD-plan-amendments.md`
+
 **Location:** `{run_reports_dir}`
 
-For each deviation from the original plan:
-- What the plan specified
-- What was actually implemented
-- Why the change was necessary
-- Whether the original plan should be updated
+Diff the original plan against what was actually built and document:
+
+```
+## Plan Amendments Summary
+
+Overall adherence: [HIGH | MEDIUM | LOW]
+Phases with deviations: [list]
+
+## Deviations
+
+### Phase {NN}: {phase-slug}
+- **Plan specified:** [what the plan said to do]
+- **Actually implemented:** [what was done instead]
+- **Why the change was necessary:** [root cause of the deviation]
+- **Architectural impact:** [Does this represent a permanent decision that should be recorded as an ADR? Yes/No]
+
+## Phases Implemented As Planned
+- Phase {NN}: {phase-slug} — no deviations
+```
+
+If all phases were implemented exactly as planned, write: "All phases implemented as specified. No deviations."
 
 ---
+
 # Post-Implementation Verification
 
 These tasks execute after the orchestrator has confirmed all phases are complete.
@@ -272,16 +322,19 @@ These tasks execute after the orchestrator has confirmed all phases are complete
 
 Spin up a new subagent with a clean context. Provide it with:
 1. **The full master plan** — the same implementation plan used during execution.
-2. **All handoff reports** — file paths to every report pertaininbg to this plan in `docs/reports/`.
-3. **Decision log** — file path to `docs/reports/decisions.md`. Use this to distinguish intentional deviations from the original plan (logged as decisions) from unimplemented work.
-4. **Scope constraint:** "You are a reviewer, not an implementer. Do not modify any code. Your job is to verify whether the codebase reflects the implementation plan."
+2. **All handoff reports** — file paths to every report pertaining to this plan in `{run_reports_dir}`.
+3. **Decision log** — file path to `{run_reports_dir}/decisions.md`. Use this to distinguish intentional deviations from the original plan (logged as decisions) from unimplemented work.
+4. **Plan amendments** — file path to the plan amendments document. Use this to understand where and why the implementation diverged from the plan.
+5. **Scope constraint:** "You are a reviewer, not an implementer. Do not modify any code. Your job is to verify whether the codebase reflects the implementation plan."
 
 The subagent must:
 - Walk through each phase/step of the implementation plan.
 - For each phase, check whether the deliverables described in the plan exist and function as specified (read files, check structure, run existing tests if applicable).
 - Cross-reference against handoff reports to identify any items listed under "Open Issues" that were never resolved.
+- Cross-reference against the plan amendments to confirm documented deviations are intentional.
 
 ### Verification Report
+
 **Filename:** `YYYY-MM-DD-verification-report.md`
 **Location:** `{run_reports_dir}`
 **Contents:**
@@ -298,6 +351,9 @@ For each phase deemed complete:
 For each phase with gaps:
 - **Phase {NN}: {phase-slug}** — [What was expected vs. what was found. Be specific: missing files, failing tests, unimplemented features.]
 
+## Plan Amendments Verified
+- [Confirm each documented deviation in plan-amendments.md is reflected in the code]
+
 ## Unresolved Open Issues
 - [Items from handoff reports that remain unaddressed]
 ```
@@ -309,15 +365,27 @@ After generating the verification report, stage and commit it.
 **Commit message format:**
 ```
 verification: {plan-slug}
-Why: {1-3 sentences explaining the reasoning, not just what changed}
+
+Why: Post-implementation verification of all phases against the
+original plan and documented amendments.
 ```
 
 ## 2. README Update
 
 After the verification report is generated, the orchestrator must update `README.md` to reflect changes introduced by the implementation plan. Only update if the plan introduced:
 - New dependencies or setup steps
-- Changed usage instructions or CLI commands  
+- Changed usage instructions or CLI commands
 - New features or removed capabilities
 - Modified project structure
 
 Do not rewrite the README wholesale. Add or modify only the sections affected.
+
+## 3. AGENTS.md Update
+
+After the verification report is generated, check whether the implementation introduced changes that affect how future agents should interact with the codebase:
+- New build or test commands
+- New project structure or directories
+- New conventions or patterns established during this run
+- Decision recording locations changed
+
+If any apply, update `AGENTS.md` accordingly. Do not rewrite it — add or modify only the affected sections.
