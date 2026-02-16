@@ -36,8 +36,8 @@
         "apiKey": ""
       },
       "models": {
-        "MiniMax M2.1": {
-          "name": "MiniMax M2.1",
+        "MiniMax M2.5": {
+          "name": "MiniMax M2.5",
           "tools": true,
           "limit": {
             "context": 190000,
