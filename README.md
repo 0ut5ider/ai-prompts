@@ -1,4 +1,11 @@
+# Raison d'etre
+
+The reason this repo exists is to store my Opencode settings, commands, skill, and coding workflow structure.
+
+
+
 # AI Prompts Repository
+
 
 Configuration and prompts for AI-assisted development workflows.
 
@@ -25,7 +32,7 @@ This repository provides configuration for [OpenCode](https://opencode.ai), an A
 
 - **Commands** (`global/opencode/commands/`): Reusable prompt templates for common tasks
 - **Agents** (`global/opencode/agents/`): Agent-specific instructions and behaviors
-- **Providers** (`global/opencode/opencode.json`): LLM provider settings for MiniMax M2.1 and other models
+- **Providers** (`global/opencode/opencode.json`): LLM provider settings for MiniMax M2.5 and other models
 
 ### Quick Setup
 
@@ -38,7 +45,14 @@ ln -s ai-prompts/opencode/AGENTS.md .
 ln -s ai-prompts/opencode/opencode.json .
 ```
 
+## Workflow
+
+
+
 ## Project Documentation Structure (`docs/`)
+
+For each project where AI agents do some work, a docs/ folder structure gets created. 
+The info in the docs/ folder is populated by the various commands and agents.
 
 The AGENTS.md files in `projects/` and `stacks/` define a standardized `docs/` folder structure that AI agents create and maintain **inside each target project** that uses these agent configurations. The `docs/` folder does not live in this repository — it is generated in the project root where the agents operate.
 
