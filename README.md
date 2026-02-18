@@ -47,11 +47,15 @@ Then you wait. Depending on the plan's complexity, this can take a while. Go get
 
 ## What's In This Repo
 
+Along with the prompts and workflow, there are also a few other files I place in the folder of the project I'm working on.
+The AGENTS.md file provides context for any AI agent working on this codebase. It is meant to be read by OpenCode before beginning any task.
+
+The file structure:
+
 ```
 ai-prompts/
 ├── global/
-│   ├── opencode/          # OpenCode configuration, commands, agents, prompts
-│   └── claude/            # Claude Code configuration (placeholder)
+│   └── opencode/          # OpenCode configuration, commands, agents, prompts
 ├── projects/
 │   └── AGENTS.md          # Project-level agent context template
 ├── stacks/
