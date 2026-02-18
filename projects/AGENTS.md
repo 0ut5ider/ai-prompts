@@ -2,6 +2,8 @@
 
 This file provides context for any AI agent working on this codebase. Read this before beginning any task.
 
+For project-specific context (build commands, paths, testing methodology, versioning), see `PROJECT_CONTEXT.md`.
+
 ## Project Knowledge Sources
 
 This project maintains institutional knowledge in several locations. Before investigating any bug or planning any feature, check these sources for prior context:
@@ -162,60 +164,3 @@ Types: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 ## Decision Recording Threshold
 
 Log any implementation decision where the reasoning isn't obvious from reading the code. When uncertain whether a decision qualifies, log it. A verbose decision log costs the next agent a few hundred tokens; missing context costs a full re-investigation.
-
-## Code Change Protocol
-
-When completing a feature, bug fix, or any change that affects user-visible behavior:
-
-### Version Bumping
-
-The version number must be updated in **both** locations and they must match:
-
-1. `split/src/split.c` line 3: `#define VERSION "X.Y"`
-2. `split/README.md` line 3: `**Version:** X.Y`
-
-**When to bump:**
-- Minor version (X.Y → X.Y+1): feature additions, bug fixes that change behavior, new format support
-- Major version (X.Y → X+1.0): breaking changes, architectural rewrites
-
-**Do not** use suffixes like `-atlas` or `-split-context`. Use plain `major.minor` format.
-
-Verify after bumping:
-```
-make build/bin/split && ./build/bin/split 2>&1 | grep Version
-```
-
-The output must show the new version number.
-
-### README Updates
-
-If your changes add a new feature or change user-facing behavior, update `split/README.md` accordingly. The README documents the tool's capabilities — it must stay current.
-
-## Project Structure
-
-```
-├── AGENTS.md              # This file — agent context and conventions
-├── README.md              # Project overview, setup, usage
-├── docs/
-│   ├── decisions/         # Architecture Decision Records (ADRs)
-│   ├── plans/             # Implementation plans (features and bug fixes)
-│   └── reports/           # Run reports, decision logs, verification reports
-│       └── index.md       # Index mapping dates to implementation runs
-├── split/
-│   ├── src/               # Application source code
-│   └── README.md          # Tool-specific documentation
-└── tests/                 # Test files
-```
-
-<!-- UPDATE THE STRUCTURE ABOVE TO MATCH YOUR ACTUAL PROJECT LAYOUT -->
-
-## Build & Test Commands
-
-<!-- ADD YOUR PROJECT'S ACTUAL COMMANDS HERE -->
-<!-- Example:
-- Install dependencies: `npm install`
-- Run tests: `npm test`
-- Run single test: `npm test -- --grep "test name"`
-- Build: `npm run build`
-- Lint: `npm run lint`
--->
