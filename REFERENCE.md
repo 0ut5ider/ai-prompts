@@ -29,10 +29,6 @@ ai-prompts/
 │   └── README.md                        # Symlink setup instructions
 ├── projects/
 │   └── AGENTS.md                        # Project-level agent context template
-├── stacks/
-│   ├── AGENTS.md                        # Stack-level agent context template
-│   ├── c/                               # C-specific stack config (placeholder)
-│   └── general/                         # General stack config (placeholder)
 ├── README.md                            # Workflow overview and introduction
 └── REFERENCE.md                         # This file
 ```
@@ -339,7 +335,7 @@ Refs: {ADR number or decision log entry, if applicable}
 
 ## Project Documentation Structure (`docs/`)
 
-The `projects/AGENTS.md` and `stacks/AGENTS.md` templates define a standardized `docs/` folder structure that AI agents create and maintain **inside each target project**. The `docs/` folder does not live in this repository — it is generated in the project root where the agents operate.
+The `projects/AGENTS.md` template defines a standardized `docs/` folder structure that AI agents create and maintain **inside each target project**. The `docs/` folder does not live in this repository — it is generated in the project root where the agents operate.
 
 ### Directory Structure
 
@@ -566,12 +562,4 @@ A comprehensive template dropped into target project roots. Provides:
 - **Decision recording threshold**: Log any decision where reasoning isn't obvious from code
 - **Code change protocol**: Version bumping rules and README update requirements (includes project-specific examples that should be customized)
 
-### `stacks/AGENTS.md`
-
-A lighter template for stack-specific context. Contains:
-
-- **Project knowledge sources**: Subset of the project template (decision logs, plan amendments, git history, code comments, plans, reports index)
-- **Investigation protocol**: Five-step lookup order
-- **Code change protocol**: Version bumping and README update rules (includes project-specific examples that should be customized)
-
-Both templates include placeholder sections (marked with HTML comments like `<!-- UPDATE THE STRUCTURE ABOVE -->` and `<!-- ADD YOUR PROJECT'S ACTUAL COMMANDS HERE -->`) that should be customized per project.
+The template includes placeholder sections (marked with HTML comments like `<!-- UPDATE THE STRUCTURE ABOVE -->` and `<!-- ADD YOUR PROJECT'S ACTUAL COMMANDS HERE -->`) that should be customized per project.
