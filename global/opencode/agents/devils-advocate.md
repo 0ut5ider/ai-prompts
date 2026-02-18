@@ -1,10 +1,11 @@
 ---
-description: testing
+description: A bold, insightful intellectual sparring partner.
 mode: primary
 color: "#FFAC1C"
 tools:
   write: false
   edit: false
+  bash: false
   question: true
 ---
 

@@ -1,8 +1,32 @@
 # Raison d'etre
 
-The reason this repo exists is to store my Opencode settings, commands, skill, and coding workflow structure.
+The reason this repo exists is because I have noticed certain patterns in my coding workflow which I wanted to standardize. This repo is built around how I work, and will continue to evolve with how I evolve and grow. 
+The main tool I use these days for coding is [OpenCode](https://opencode.ai), and everything in this repo is setup for OpenCode.  
+However it is easily adaptable to most other coding agents.
 
 
+The repo consists my Opencode settings, commands, skill, and coding workflow structure.
+
+# My workflow
+
+The way I work today is in two broad phases. 
+The first phase is to have a conversation with the AI agent about what I want to accomplish. This involves putting OpenCodee in the "Devils Advocate" agent mode (see prompt in global/opencode/agents/ folder). That prompts acts like an intellectual sparring partner. It surfaces my blind pots, pushes back on inconsistencies in my thinking and much much more. The agent is also set to act in a Plan mode style, where it can't write or edit files without first asking permission. 
+
+I typically use Claude Opus 4.6 (at the time of writing) for this step as it's a very smart agent and it's very thorough in it's analysis of the code-base. It's important to use the smartest agents you have access to for this first conversation since it needs to fully understand both the issue you want resolved (bug-fix, new feature, etc) and the current state of your codebase. 
+
+After the conversation is done, and the agent fully understands what needs to happen it will usually ask to create a plan. This is the point where I bring in the /write-plan command. It instructs the agent to generate and write to a .md file the plan in a very specific format (which will be useful later). There are several instructions the command gives the agent:
+- keep enough detail in the plan file so as to make it self-sufficient, so it can exist without the need for the conversation context
+- organize the plan in separate phases which can be executed on their own
+- what else? Populate with a few more high level points.
+
+Once the plan file is written I start a fresh conversation. This is important so that the ai agent has a fresh context which is not polluted with any other previous conversation.
+
+In this new conversation I use the /execute-plan along with @path to the plan file generated earlier.
+This will become the orchestrator agent which will take the plan and will delegate each phase of the plan to a fresh subagent (again to keep clean context for each phase).
+
+{Describe the high level function of the execute-plan command: creation of new git branch, commit after each phase is complete, etc}
+
+Now you wait. This can take quite some time depending on how complex and lengthy the plan was.
 
 # AI Prompts Repository
 
@@ -17,6 +41,7 @@ ai-prompts/
 │   ├── opencode/
 │   │   ├── commands/         # Reusable command definitions
 │   │   ├── agents/          # Agent configurations
+│   │   ├── prompts/         # Reusable prompt fragments
 │   │   ├── AGENTS.md        # Global agent context
 │   │   └── opencode.json    # Provider and model configuration
 │   └── README.md
@@ -32,6 +57,7 @@ This repository provides configuration for [OpenCode](https://opencode.ai), an A
 
 - **Commands** (`global/opencode/commands/`): Reusable prompt templates for common tasks
 - **Agents** (`global/opencode/agents/`): Agent-specific instructions and behaviors
+- **Prompts** (`global/opencode/prompts/`): Reusable system prompt fragments shared across commands and agents
 - **Providers** (`global/opencode/opencode.json`): LLM provider settings for MiniMax M2.5 and other models
 
 ### Quick Setup
@@ -41,6 +67,7 @@ For OpenCode to use this configuration, create symlinks to the natural storage l
 ```bash
 ln -s ai-prompts/opencode/agents/ .
 ln -s ai-prompts/opencode/commands/ .
+ln -s ai-prompts/opencode/prompts/ .
 ln -s ai-prompts/opencode/AGENTS.md .
 ln -s ai-prompts/opencode/opencode.json .
 ```

@@ -1,0 +1,138 @@
+
+I typically use Claude Opus 4.6 (at the time of writing) for this step as it's a very smart agent and it's very thorough in it's analysis of the code-base. It's important to use the smartest agents you have access to for this first conversation since it needs to fully understand both the issue you want resolved (bug-fix, new feature, etc) and the current state of your codebase. 
+
+After the conversation is done, and the agent fully understands what needs to happen it will usually ask to create a plan. This is the point where I bring in the /write-plan command. It instructs the agent to generate and write to a .md file the plan in a very specific format (which will be useful later). There are several instructions the command gives the agent:
+- keep enough detail in the plan file so as to make it self-sufficient, so it can exist without the need for the conversation context
+- organize the plan in separate phases which can be executed on their own
+- what else? Populate with a few more high level points.
+
+Once the plan file is written I start a fresh conversation. This is important so that the ai agent has a fresh context which is not polluted with any other previous conversation.
+
+In this new conversation I use the /execute-plan along with @path to the plan file generated earlier.
+This will become the orchestrator agent which will take the plan and will delegate each phase of the plan to a fresh subagent (again to keep clean context for each phase).
+
+{Describe the high level function of the execute-plan command: creation of new git branch, commit after each phase is complete, etc}
+
+Now you wait. This can take quite some time depending on how complex and lengthy the plan was.
+
+---
+# Plan-First AI Development Workflow
+
+Most AI coding workflows are reactive: paste a problem, get code back, hope it works. This repository enforces a different pattern — **structured thinking before code gets written**, with strict context isolation between phases.
+
+The result: AI agents that understand *why* before they write *what*, with an institutional memory that prevents the same questions from being re-investigated across sessions.
+
+The workflow is currently implemented for [OpenCode](https://opencode.ai), but the pattern is tool-agnostic. The commands and agents here are templates you can adapt to any AI coding assistant.
+
+## The Workflow
+
+Three phases, each with hard boundaries between them:
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                  │     │                  │     │                  │
+│   1. THINK       │────▶│   2. PLAN        │────▶│   3. EXECUTE     │
+│                  │     │                  │     │                  │
+│  Devil's         │     │  Write a self-   │     │  Fresh context.  │
+│  Advocate agent  │     │  contained plan  │     │  Orchestrator    │
+│  challenges your │     │  that needs no   │     │  delegates each  │
+│  assumptions.    │     │  conversation    │     │  phase to a      │
+│  No code — only  │     │  context to be   │     │  separate sub-   │
+│  questions.      │     │  understood.     │     │  agent. Tests    │
+│                  │     │                  │     │  first. Commits. │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+     No file access          No code written        New conversation
+```
+
+### Phase 1: Think
+
+A conversation with an AI agent configured as an **intellectual sparring partner**. This agent has no file editing capabilities — it can only ask questions and challenge your thinking. It surfaces blind spots, pushes back on inconsistencies, and demands precision.
+
+Use the smartest model available here. The agent needs deep understanding of both the problem and your codebase before any plan gets written.
+
+### Phase 2: Plan
+
+When the conversation reaches clarity, the `/write-plan` command produces a **self-contained implementation plan** saved to `docs/plans/` in your target project. The plan must be fully self-sufficient — a different agent in a different session will read it with zero access to the original conversation.
+
+Plans are organized into independent phases with clear scope boundaries. The planning agent investigates prior context (ADRs, decision logs, git history) before writing anything. It cannot write code.
+
+### Phase 3: Execute
+
+A **fresh conversation** — clean context, no pollution from the planning session. The `/execute-plan` orchestrator reads the plan and delegates each phase to a separate subagent. Each subagent:
+
+- Receives the system prompt, full plan, its phase scope, and the previous phase's handoff report
+- Writes tests first, then implements
+- Validates, writes a handoff report, commits
+
+After all phases complete, a **read-only verification agent** checks everything against the original plan. Deviations are documented as plan amendments.
+
+## Why This Works
+
+**Context isolation** — Fresh context between planning and execution, and between each execution phase. Prevents the accumulated confusion that degrades agent performance in long sessions.
+
+**Institutional memory** — Every decision is documented: ADRs, decision logs, plan amendments, code comments, commit messages. Future agents never re-investigate what was already decided.
+
+**Separation of concerns** — The planner can't code. The implementer follows the plan. The verifier can't modify code. No self-certification.
+
+**TDD enforcement** — Tests before implementation in both planning and execution phases.
+
+## What's in This Repo
+
+```
+ai-prompts/
+├── global/opencode/
+│   ├── commands/          # Slash commands (write-plan, execute-plan, etc.)
+│   ├── agents/            # Agent configurations (devil's advocate, etc.)
+│   └── prompts/           # System prompts (autonomous engineering agent)
+├── projects/AGENTS.md     # Project-level agent context template
+└── stacks/AGENTS.md       # Stack-specific agent context template
+```
+
+The workflow creates a `docs/` structure inside each target project:
+
+- **`docs/decisions/`** — Architecture Decision Records (immutable once accepted)
+- **`docs/plans/`** — Implementation plans
+- **`docs/reports/`** — Handoff reports, decision logs, plan amendments, verification results
+
+See [REFERENCE.md](REFERENCE.md) for the complete technical reference, including file formats, naming conventions, and detailed command documentation.
+
+## Additional Tools
+
+**`/chat-summary`** — Produces a decision archaeology report from a conversation: reasoning evolution, rejected paths, unresolved tensions. Useful for capturing context that would otherwise be lost when a session ends.
+
+**`/code-simplifier`** — Behavior-preserving code simplification for JS/TS/PHP/Python/C/C++. Variants include C-specific simplifiers, one of which enforces TDD and formal planning before modifying anything.
+
+## Getting Started
+
+### Prerequisites
+
+- [OpenCode](https://opencode.ai) installed and configured
+- Access to an LLM provider (the workflow is model-agnostic, but uses Claude Opus 4.6 for the Think phase by default)
+
+### Setup
+
+Symlink the configuration into your working directory:
+
+```bash
+# Symlink global config into your project or OpenCode working directory
+ln -s /path/to/ai-prompts/global/opencode/agents/ .
+ln -s /path/to/ai-prompts/global/opencode/commands/ .
+ln -s /path/to/ai-prompts/global/opencode/prompts/ .
+ln -s /path/to/ai-prompts/global/opencode/AGENTS.md .
+ln -s /path/to/ai-prompts/global/opencode/opencode.json .
+```
+
+Then copy the project-level agent context into any project where you want the workflow:
+
+```bash
+cp /path/to/ai-prompts/projects/AGENTS.md /path/to/your-project/AGENTS.md
+```
+
+Edit the copied `AGENTS.md` to reflect your project's stack and conventions.
+
+### Usage
+
+1. Start OpenCode, switch to the **Devil's Advocate** agent, and have a conversation about what you want to build or fix
+2. When ready, run `/write-plan` to generate an implementation plan
+3. Start a **new conversation**, then run `/execute-plan` with the path to your plan file
+4. Review the generated reports in `docs/reports/`
