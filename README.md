@@ -26,7 +26,7 @@ When the conversation reaches clarity — when the agent understands both the pr
 - **Phased.** Work is organized into discrete phases that can be executed independently. Each phase is one logical unit of work.
 - **Grounded in prior decisions.** Before writing anything, the planning agent checks existing ADRs, previous decision logs, git history, and prior plans touching the same area. It doesn't plan in a vacuum.
 - **Decisions are explicit.** Every significant choice includes what was decided, what alternatives were rejected and why, what assumptions must hold, and what would invalidate the decision.
-- **Test-first.** Every phase defines its tests before its implementation. The executing agent writes tests first, watches them fail, implements, then watches them pass.
+- **Test-first.** Every phase defines its tests before its implementation. The executing agent writes tests first, watches them fail, implements, then watches them pass. I find this to be very useful as we build unit tests for all the code that is written and that helps in telling the agent if the phase is complete or not. 
 - **Assumption-aware.** The plan lists what it assumes to be true, and what parts of the plan break if each assumption turns out to be wrong.
 
 ### Phase 2: Execute Without Looking Back
