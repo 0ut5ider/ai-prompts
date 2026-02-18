@@ -1,165 +1,85 @@
-# Raison d'etre
+# AI Prompts
 
-The reason this repo exists is because I have noticed certain patterns in my coding workflow which I wanted to standardize. This repo is built around how I work, and will continue to evolve with how I evolve and grow. 
-The main tool I use these days for coding is [OpenCode](https://opencode.ai), and everything in this repo is setup for OpenCode.  
-However it is easily adaptable to most other coding agents.
+This repo exists because I kept doing the same things over and over in my AI-assisted coding sessions — and doing them inconsistently. Planning conversations that lost context. Execution runs that forgot what the planning phase decided. Decision records that lived only in chat history. So I codified the patterns that worked and threw away the ones that didn't.
 
+Everything here is built around [OpenCode](https://opencode.ai), which is what I use daily. But the ideas — the two-phase workflow, the separation of planning from execution, the obsessive context isolation — are tool-agnostic. You could adapt this to Claude Code, Cursor, Aider, or whatever comes next. There's even an empty `global/claude/` directory waiting for when I get around to that.
 
-The repo consists my Opencode settings, commands, skill, and coding workflow structure.
+## The Workflow
 
-# My workflow
+This is the core of how I work. Two phases, deliberately separated, with a hard boundary between them.
 
-The way I work today is in two broad phases. 
-The first phase is to have a conversation with the AI agent about what I want to accomplish. This involves putting OpenCodee in the "Devils Advocate" agent mode (see prompt in global/opencode/agents/ folder). That prompts acts like an intellectual sparring partner. It surfaces my blind pots, pushes back on inconsistencies in my thinking and much much more. The agent is also set to act in a Plan mode style, where it can't write or edit files without first asking permission. 
+### Phase 1: Think Before You Touch Anything
 
-I typically use Claude Opus 4.6 (at the time of writing) for this step as it's a very smart agent and it's very thorough in it's analysis of the code-base. It's important to use the smartest agents you have access to for this first conversation since it needs to fully understand both the issue you want resolved (bug-fix, new feature, etc) and the current state of your codebase. 
+I start every non-trivial task by switching OpenCode to the **Devil's Advocate** agent. This agent can't edit files, can't run commands, can't write code. All it can do is talk and ask questions. That's the point.
 
-After the conversation is done, and the agent fully understands what needs to happen it will usually ask to create a plan. This is the point where I bring in the /write-plan command. It instructs the agent to generate and write to a .md file the plan in a very specific format (which will be useful later). There are several instructions the command gives the agent:
-- keep enough detail in the plan file so as to make it self-sufficient, so it can exist without the need for the conversation context
-- organize the plan in separate phases which can be executed on their own
-- what else? Populate with a few more high level points.
+It's an intellectual sparring partner. It surfaces blind spots in my thinking, pushes back on inconsistencies, demands precision when I'm being vague, and refuses to let me skip over hard questions. It doesn't validate — it interrogates. If my premise is broken, it says so before we build on it.
 
-Once the plan file is written I start a fresh conversation. This is important so that the ai agent has a fresh context which is not polluted with any other previous conversation.
+I use the smartest model available for this step (currently Claude Opus 4.6). This phase needs to fully understand both the problem I'm trying to solve and the current state of my codebase. Cheap models cut corners here, and you pay for it later.
 
-In this new conversation I use the /execute-plan along with @path to the plan file generated earlier.
-This will become the orchestrator agent which will take the plan and will delegate each phase of the plan to a fresh subagent (again to keep clean context for each phase).
+The conversation usually goes through several rounds of challenge and refinement. The agent might ask me to clarify my assumptions, point out that a similar approach was tried and abandoned six months ago, or force me to articulate why I'm choosing one approach over another.
 
-{Describe the high level function of the execute-plan command: creation of new git branch, commit after each phase is complete, etc}
+### The Plan
 
-Now you wait. This can take quite some time depending on how complex and lengthy the plan was.
+When the conversation reaches clarity — when the agent understands both the problem and the solution well enough to stop pushing back — I run `/write-plan`. This generates a structured implementation plan as a markdown file, with several properties that matter:
 
-# AI Prompts Repository
+- **Self-sufficient.** The plan must be readable without the conversation that produced it. All relevant context, decisions, root cause analysis, and technical details get embedded directly.
+- **Phased.** Work is organized into discrete phases that can be executed independently. Each phase is one logical unit of work.
+- **Grounded in prior decisions.** Before writing anything, the planning agent checks existing ADRs, previous decision logs, git history, and prior plans touching the same area. It doesn't plan in a vacuum.
+- **Decisions are explicit.** Every significant choice includes what was decided, what alternatives were rejected and why, what assumptions must hold, and what would invalidate the decision.
+- **Test-first.** Every phase defines its tests before its implementation. The executing agent writes tests first, watches them fail, implements, then watches them pass.
+- **Assumption-aware.** The plan lists what it assumes to be true, and what parts of the plan break if each assumption turns out to be wrong.
 
+### Phase 2: Execute Without Looking Back
 
-Configuration and prompts for AI-assisted development workflows.
+I start a **fresh conversation**. This is important — clean context, no pollution from the planning discussion. The executing agent doesn't need to know about the dead ends we explored or the arguments we had. It needs the plan.
 
-## Structure
+I run `/execute-plan` with the plan file. This turns the agent into an orchestrator that:
+
+- **Creates a feature branch.** It refuses to run on `main`, `master`, or `develop`. If you're on a protected branch, it asks you to confirm a new branch name.
+- **Creates Architecture Decision Records.** If the plan identified any architectural decisions, the orchestrator writes them as formal ADRs before execution begins.
+- **Delegates each phase to a fresh subagent.** Each subagent gets clean context, the Augster system prompt (a detailed behavioral framework for execution agents), the full plan, its specific phase scope, and the previous phase's handoff report. No context leakage between phases.
+- **Tracks decisions across phases.** Each subagent appends to a shared, append-only decision log. Nothing gets lost between handoffs.
+- **Commits after each phase.** Every completed phase gets its own git commit with structured messages that explain the reasoning, not just the changes.
+- **Reviews the result.** After all phases complete, a separate reviewer subagent verifies the entire implementation against the original plan. It checks that deliverables exist, tests pass, documented deviations are intentional, and ADRs were actually created.
+- **Documents deviations.** Any differences between the plan and what was actually built get recorded in a plan amendments file.
+
+Then you wait. Depending on the plan's complexity, this can take a while. Go get coffee.
+
+## What's In This Repo
 
 ```
 ai-prompts/
-├── global/                    # OpenCode global configuration
-│   ├── opencode/
-│   │   ├── commands/         # Reusable command definitions
-│   │   ├── agents/          # Agent configurations
-│   │   ├── prompts/         # Reusable prompt fragments
-│   │   ├── AGENTS.md        # Global agent context
-│   │   └── opencode.json    # Provider and model configuration
-│   └── README.md
-├── projects/                  # Project-specific agent context
-│   └── AGENTS.md
-└── stacks/                    # Stack-specific agent context
-    └── AGENTS.md
+├── global/
+│   ├── opencode/          # OpenCode configuration, commands, agents, prompts
+│   └── claude/            # Claude Code configuration (placeholder)
+├── projects/
+│   └── AGENTS.md          # Project-level agent context template
+├── stacks/
+│   ├── AGENTS.md          # Stack-level agent context template
+│   ├── c/                 # C-specific configuration (placeholder)
+│   └── general/           # General stack configuration (placeholder)
+└── README.md
 ```
 
-## OpenCode Configuration
+- **`global/opencode/`** contains the commands (`/write-plan`, `/execute-plan`, `/chat-summary`, code simplifiers), agents (Devil's Advocate, testing), the Augster system prompt, and OpenCode provider/model configuration.
+- **`projects/AGENTS.md`** and **`stacks/AGENTS.md`** are templates you drop into target projects. They establish the `docs/` folder convention (decisions, plans, reports) and define investigation protocols, code comment conventions, and commit message formats.
 
-This repository provides configuration for [OpenCode](https://opencode.ai), an AI coding assistant. The configuration includes:
+For the full technical details — command specifications, agent behavior rules, docs/ structure, ADR format, report schemas — see [REFERENCE.md](REFERENCE.md).
 
-- **Commands** (`global/opencode/commands/`): Reusable prompt templates for common tasks
-- **Agents** (`global/opencode/agents/`): Agent-specific instructions and behaviors
-- **Prompts** (`global/opencode/prompts/`): Reusable system prompt fragments shared across commands and agents
-- **Providers** (`global/opencode/opencode.json`): LLM provider settings for MiniMax M2.5 and other models
+## Quick Setup
 
-### Quick Setup
-
-For OpenCode to use this configuration, create symlinks to the natural storage locations:
+For OpenCode to use this configuration, symlink from your home directory to the appropriate locations:
 
 ```bash
-ln -s ai-prompts/opencode/agents/ .
-ln -s ai-prompts/opencode/commands/ .
-ln -s ai-prompts/opencode/prompts/ .
-ln -s ai-prompts/opencode/AGENTS.md .
-ln -s ai-prompts/opencode/opencode.json .
+ln -s ai-prompts/global/opencode/agents/ .
+ln -s ai-prompts/global/opencode/commands/ .
+ln -s ai-prompts/global/opencode/prompts/ .
+ln -s ai-prompts/global/opencode/AGENTS.md .
+ln -s ai-prompts/global/opencode/opencode.json .
 ```
 
-## Workflow
+For target projects, copy or symlink `projects/AGENTS.md` into the project root to enable the `docs/` workflow. If you have stack-specific needs, also pull in the relevant `stacks/` template.
 
+## Reference
 
-
-## Project Documentation Structure (`docs/`)
-
-For each project where AI agents do some work, a docs/ folder structure gets created. 
-The info in the docs/ folder is populated by the various commands and agents.
-
-The AGENTS.md files in `projects/` and `stacks/` define a standardized `docs/` folder structure that AI agents create and maintain **inside each target project** that uses these agent configurations. The `docs/` folder does not live in this repository — it is generated in the project root where the agents operate.
-
-### Structure
-
-```
-{project_root}/
-└── docs/
-    ├── decisions/                               # Architecture Decision Records (ADRs)
-    │   ├── 0001-kebab-case-title.md             # Sequential numbering, zero-padded 4 digits
-    │   ├── 0002-kebab-case-title.md
-    │   └── ...
-    │
-    ├── plans/                                   # Implementation plans
-    │   ├── feature_<slug>.md                    # Feature implementation plans
-    │   └── bug_fix_<slug>.md                    # Bug fix implementation plans
-    │
-    └── reports/                                 # Orchestrator run outputs
-        ├── index.md                             # Master index: date -> run mapping table
-        │
-        └── {YYYY-MM-DD}-{plan-slug}/           # One directory per orchestrator run
-            ├── YYYY-MM-DD-phase-01-<slug>.md    # Handoff report per phase
-            ├── YYYY-MM-DD-phase-02-<slug>.md
-            ├── ...
-            ├── decisions.md                     # Append-only decision log for this run
-            ├── YYYY-MM-DD-plan-amendments.md    # Deviations from the original plan
-            └── YYYY-MM-DD-verification-report.md # Post-implementation verification
-```
-
-### Purpose of Each Subdirectory
-
-#### `docs/decisions/` — Architecture Decision Records (ADRs)
-
-Formal records of architectural decisions affecting the project long-term: technology choices, patterns, dependency selections, and structural decisions. ADRs use 4-digit zero-padded sequential numbering (`0001`, `0002`, ...) with kebab-case titles.
-
-- **Created by:** The orchestrator (`code_implementation-orchestrator.md`)
-- **When:** Before Phase 01 (from the plan), or during plan amendments when architectural deviations occur
-- **Immutability rule:** Once accepted, ADRs are never edited. Reversals create a new ADR with "Superseded" status.
-
-#### `docs/plans/` — Implementation Plans
-
-Full implementation plans for features and bug fixes, written by the planning agent at the end of a planning conversation.
-
-- **Created by:** The planning agent (`plan-creation+save.md`)
-- **Naming:** `feature_<slug>.md` for features, `bug_fix_<slug>.md` for bug fixes
-
-#### `docs/reports/` — Orchestrator Run Reports
-
-Contains outputs from each orchestrator run, organized into date-stamped subdirectories.
-
-- **`index.md`** — A master table mapping dates to implementation runs. Created if missing at the start of each run; appended with one row per run.
-- **`{YYYY-MM-DD}-{plan-slug}/`** — One directory per orchestrator run (suffixed `-02`, `-03` for same-day reruns), containing:
-
-| File | Created By | Purpose |
-|------|------------|---------|
-| `YYYY-MM-DD-phase-NN-<slug>.md` | Subagent | Handoff report for each implementation phase |
-| `decisions.md` | Subagent | Append-only decision log shared across all phases |
-| `YYYY-MM-DD-plan-amendments.md` | Orchestrator | Documents where implementation deviated from the plan |
-| `YYYY-MM-DD-verification-report.md` | Verification subagent | Post-implementation verification results |
-
-### Investigation Protocol
-
-Before starting any implementation, agents follow this lookup order to gather prior context:
-
-1. Search `docs/plans/` for existing plans touching the same area
-2. Search `docs/decisions/` for ADRs affecting the relevant modules
-3. Search `docs/reports/*/decisions.md` for prior decisions about the relevant modules
-4. Search `docs/reports/*/*-plan-amendments.md` for previous deviations
-
-### Key Design Principles
-
-- **ADRs are immutable** — once accepted, never edited; reversals create new ADRs
-- **`decisions.md` is append-only** — each phase appends; never overwrite
-- **Directories are created lazily** — agents create `decisions/`, `plans/`, and `reports/` if missing
-- **Run directories use date prefixes** — with `-02`, `-03` suffixes for same-day reruns
-- **Code references documentation** — comments use the pattern `// See ADR {NNNN} or docs/reports/[path] for full context`
-
-## Usage
-
-- Reference `global/opencode/commands/` for reusable command templates
-- Configure `global/opencode/opencode.json` to point to your preferred LLM providers
-- Modify `global/opencode/agents/` to customize agent behavior
-- Copy or symlink `projects/AGENTS.md` into your project root to enable the `docs/` workflow
+All technical specifications — the full docs/ directory structure, ADR rules, investigation protocol, command and agent details, report formats, naming conventions — live in [REFERENCE.md](REFERENCE.md).
