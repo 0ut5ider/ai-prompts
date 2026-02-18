@@ -56,6 +56,7 @@ The file structure:
 ai-prompts/
 ├── global/
 │   └── opencode/          # OpenCode configuration, commands, agents, prompts
+│       └── AGENTS.md.template  # Template for local agent config (personal info)
 ├── projects/
 │   └── AGENTS.md          # Project-level agent context template
 ├── stacks/
@@ -65,12 +66,24 @@ ai-prompts/
 └── README.md
 ```
 
-- **`global/opencode/`** contains the commands (`/write-plan`, `/execute-plan`, `/chat-summary`, code simplifiers), agents (Devil's Advocate, testing), the Augster system prompt, and OpenCode provider/model configuration.
+- **`global/opencode/`** contains the commands (`/write-plan`, `/execute-plan`, `/chat-summary`, code simplifiers), agents (Devil's Advocate, testing), the Augster system prompt, and OpenCode provider/model configuration. The `AGENTS.md` file is generated locally from `AGENTS.md.template` — it contains personal git config and is gitignored.
 - **`projects/AGENTS.md`** and **`stacks/AGENTS.md`** are templates you drop into target projects. They establish the `docs/` folder convention (decisions, plans, reports) and define investigation protocols, code comment conventions, and commit message formats.
 
 For the full technical details — command specifications, agent behavior rules, docs/ structure, ADR format, report schemas — see [REFERENCE.md](REFERENCE.md).
 
 ## Quick Setup
+
+### Personalization
+
+The global OpenCode agent config (`global/opencode/AGENTS.md`) contains git author info and is gitignored. To create your local copy:
+
+```bash
+cp global/opencode/AGENTS.md.template global/opencode/AGENTS.md
+```
+
+Then edit `global/opencode/AGENTS.md` and replace `YOUR_NAME` and `YOUR_EMAIL` with your actual details. This file won't be committed.
+
+### Symlinks
 
 For OpenCode to use this configuration, symlink from your home directory to the appropriate locations:
 
