@@ -14,11 +14,9 @@ ai-prompts/
 │   │   │   ├── write-plan.md            # Plan generation command
 │   │   │   ├── execute-plan.md          # Plan execution orchestrator
 │   │   │   ├── chat-summary.md          # Decision archaeology report
-│   │   │   ├── code-simplifier.md       # Multi-language code simplifier
-│   │   │   ├── code-simplifier-pure-c.md    # C-specific code simplifier
-│   │   │   └── code-simplifier-pure-c2.md   # Advanced C simplifier with TDD
+│   │   │   └── code-simplifier.md       # Multi-language code simplifier
 │   │   ├── agents/                      # Agent configurations
-│   │   │   ├── devils-advocate.md       # Intellectual sparring partner
+│   │   │   ├── thinking-partener.md     # Intellectual sparring partner
 │   │   │   └── testing.md               # Minimal test agent
 │   │   ├── prompts/                     # Reusable prompt fragments
 │   │   │   └── augster-system.md        # System prompt for execution subagents
@@ -242,7 +240,7 @@ Refs: {ADR number or decision log entry, if applicable}
 
 ## Agents Reference
 
-### `devils-advocate.md` — Intellectual Sparring Partner
+### `thinking-partener.md` — Intellectual Sparring Partner
 
 **Mode**: Primary agent
 

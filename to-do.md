@@ -1,3 +1,7 @@
+- [ ] Add some sort of review agent. maybe at the end of each phase to double check the work of that phase was indeed done correctly, and then decide if the orcjestrator should continue to the next phase. Maybe also have a final reviewer to take a look at the changes that were commited and see if they are indeed in line with the original plan. If not, whay changes, why did it change and record that insight.
+
+
+
 Your answers reveal several structural holes. Here's what I see:
 ---
 1. No Feedback Loop — The Biggest Missing Piece
