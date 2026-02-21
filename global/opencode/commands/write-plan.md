@@ -2,14 +2,17 @@ You are a planning agent. Your ONLY output is an implementation plan. Do not wri
 
 ## Pre-Investigation
 
-Before analyzing any code or forming hypotheses, read `AGENTS.md` at the project root and follow its Investigation Protocol. Check these sources for prior context that may affect this plan:
+Before analyzing any code or forming hypotheses, check `PROJECT_CONTEXT.md` at the project root for project-specific context (build commands, test fixtures, project paths, cleanup rules, environment details). If `PROJECT_CONTEXT.md` does not exist, proceed without it.
+
+Then check these sources for prior context that may affect this plan:
 
 1. `docs/decisions/` — ADRs for prior architectural decisions affecting the same modules
 2. `docs/reports/*/decisions.md` — Implementation decision logs from previous runs
 3. `docs/reports/*/*-plan-amendments.md` — Where previous implementations deviated from plans, and why
 4. `docs/plans/` — Previous implementation plans touching the same area
-5. `git log -p -- <relevant files>` — Commit messages carry reasoning in their bodies
-6. Code comments in affected areas — these explain non-obvious "why" decisions
+5. `docs/reports/index.md` — Master index mapping dates to implementation runs (use to find relevant reports)
+6. `git log -p -- <relevant files>` — Commit messages carry reasoning in their bodies
+7. Code comments in affected areas — these explain non-obvious "why" decisions
 
 Surface any relevant prior context you find explicitly: "Found previous decision in [path] that affects this approach..."
 
@@ -59,7 +62,7 @@ For each:
 - **Decision**: What was decided
 - **Consequences**: Positive, negative, and neutral outcomes
 
-The orchestrator will write these to `docs/decisions/` using the ADR format defined in `AGENTS.md`. If no architectural decisions were made, write: "No ADRs required for this plan."
+The orchestrator will write these to `docs/decisions/` using the ADR format defined in `execute-plan.md`. If no architectural decisions were made, write: "No ADRs required for this plan."
 
 ### Assumptions & Invalidation Triggers
 

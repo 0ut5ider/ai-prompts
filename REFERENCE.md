@@ -26,7 +26,7 @@ ai-prompts/
 │   ├── claude/                          # Claude Code configuration (placeholder)
 │   └── README.md                        # Symlink setup instructions
 ├── projects/
-│   └── AGENTS.md                        # Project-level agent context template
+│   └── PROJECT_CONTEXT.md              # Project-specific context template
 ├── README.md                            # Workflow overview and introduction
 └── REFERENCE.md                         # This file
 ```
@@ -75,7 +75,7 @@ The global agent context file (`global/opencode/AGENTS.md`) configures:
 - Features: `docs/plans/feature_<slug>.md`
 - Bug fixes: `docs/plans/bug_fix_<slug>.md`
 
-**Pre-investigation**: Before planning, the agent follows the investigation protocol — checking existing ADRs, decision logs, plan amendments, previous plans, git history, and code comments.
+**Pre-investigation**: Before planning, the agent checks `PROJECT_CONTEXT.md` for project-specific context, then follows the investigation protocol — checking existing ADRs, decision logs, plan amendments, previous plans, run reports index, git history, and code comments.
 
 **Plan structure**:
 
@@ -114,7 +114,7 @@ The global agent context file (`global/opencode/AGENTS.md`) configures:
 7. **Phase commits**: Stage and commit all changes after each phase
 8. **Plan amendments**: After all phases, diff the plan against what was built and document deviations
 9. **Verification**: Spin up a reviewer subagent to verify implementation against the plan
-10. **Post-implementation**: Update README.md and AGENTS.md if the implementation warrants it
+10. **Post-implementation**: Update README.md and PROJECT_CONTEXT.md if the implementation warrants it
 
 **What each subagent receives**:
 
@@ -124,8 +124,7 @@ The global agent context file (`global/opencode/AGENTS.md`) configures:
 | Full master plan | Complete plan file for broader context |
 | Phase scope constraint | Explicit instruction to execute only its assigned phase |
 | Previous handoff report | File path to the most recent handoff report (none for Phase 01) |
-| Test fixture path | `../sample_model/LowPolyLowTexture-02` for validation |
-| Project context | Instruction to read `AGENTS.md` at project root |
+| Project context | Instruction to read `PROJECT_CONTEXT.md` at project root (graceful fallback if absent) |
 | Code comment requirement | Rules for inline comments explaining non-obvious decisions |
 
 **Commit message format**:
@@ -183,58 +182,6 @@ Refs: {ADR number or decision log entry, if applicable}
 5. Use standard library and modern idioms
 
 **Language-specific guidance** is provided for: JavaScript/TypeScript, WordPress PHP, Python, C, and C++.
-
----
-
-### `code-simplifier-pure-c.md` — C-Specific Code Simplifier
-
-**Purpose**: Focused simplification for C code, with detailed rules for preserving defined behavior and avoiding undefined behavior.
-
-**Key focus areas**:
-- Preserve functionality and defined behavior (sequence points, strict aliasing, volatile semantics, signedness)
-- Apply project standards from CLAUDE.md (header ordering, naming, `static`/`const` usage, error handling conventions)
-- Enhance clarity (reduce nesting, improve names, replace magic numbers)
-- Simplify resource management (consolidate cleanup paths, `goto cleanup` patterns)
-- Simplify preprocessor usage (`static inline` over function-like macros)
-
-**Scope**: Focuses on recently modified code unless instructed otherwise.
-
----
-
-### `code-simplifier-pure-c2.md` — Advanced C Simplifier with TDD
-
-**Purpose**: A more rigorous C simplification workflow that diagnoses before refactoring, generates a formal plan, and enforces TDD throughout.
-
-**Phases**:
-
-| Phase | Purpose |
-|-------|---------|
-| 1. Analyze | Map behavior, ownership, cleanup paths, hazards; grade severity (High/Medium/Low) |
-| 2. Decide | Determine whether to refactor — decline when risk outweighs benefit |
-| 3. Plan | Generate plan to `docs/plans/simplify_<filename>_<function>.md` with phases, tests, verification |
-| 4. Execute | One logical change at a time; each must be independently correct |
-| 5. Validate | Self-validation checklist (resource leaks, pointer types, arithmetic, tests) |
-| 6. Integrate | Scope verification, static analysis, ABI stability |
-
-**C-specific smell catalog**:
-
-| Smell | Simplification |
-|-------|---------------|
-| Pyramid-of-doom error handling | Linear `goto cleanup` chain |
-| Duplicated cleanup blocks | Single cleanup label with reverse-order release |
-| Inconsistent NULL checks | Consistent policy per function |
-| Magic numbers | Named `enum`, `#define`, or `static const` |
-| God functions (200+ lines) | Extract coherent sub-operations |
-| Stringly-typed interfaces | `enum` + switch or function pointer table |
-| Redundant casts | Remove |
-| `sizeof(Type)` | Use `sizeof(*ptr)` or `sizeof(var)` |
-| Macro abuse | Convert to `static inline` |
-| Deep `#ifdef` nesting | Extract platform-specific functions |
-| Boolean parameters | Named constants or options struct |
-
-**TDD enforcement order**: Write tests → Run (expect pass on unmodified code) → Apply simplification → Run tests (expect pass) → Self-validate → Commit
-
-**Uses model**: `opus` (specified in frontmatter)
 
 ---
 
@@ -333,7 +280,7 @@ Refs: {ADR number or decision log entry, if applicable}
 
 ## Project Documentation Structure (`docs/`)
 
-The `projects/AGENTS.md` template defines a standardized `docs/` folder structure that AI agents create and maintain **inside each target project**. The `docs/` folder does not live in this repository — it is generated in the project root where the agents operate.
+The `execute-plan.md` command defines a standardized `docs/` folder structure that AI agents create and maintain **inside each target project**. The `docs/` folder does not live in this repository — it is generated in the project root where the agents operate.
 
 ### Directory Structure
 
@@ -517,7 +464,7 @@ Phases verified: [N of M]
 
 ## Investigation Protocol
 
-Before starting any implementation, agents follow this lookup order to gather prior context:
+The canonical investigation protocol is defined in the command files (`write-plan.md` and `execute-plan.md`). The following is reference documentation. Before starting any implementation, agents follow this lookup order to gather prior context:
 
 1. Search `docs/plans/` for existing plans touching the same area
 2. Search `docs/decisions/` for ADRs affecting the relevant modules
@@ -546,18 +493,18 @@ If relevant prior context is found, surface it explicitly: "I found a previous d
 
 ## Project and Stack Templates
 
-### `projects/AGENTS.md`
+### `projects/PROJECT_CONTEXT.md`
 
-A comprehensive template dropped into target project roots. Provides:
+The sole project-level template, dropped into target project roots. Provides project-specific context that the command files cannot:
 
-- **Project knowledge sources**: Decision logs, plan amendments, ADRs, git history, code comments, previous plans, run reports index
-- **Investigation protocol**: The six-step lookup order agents follow before beginning work
-- **Documentation structure**: Full `docs/` directory layout with "who creates what" table
-- **Naming conventions**: For ADRs, plans, run directories, and handoff reports
-- **ADR format**: Complete template with Status, Date, Context, Decision, Consequences, Plan Reference
-- **Code comment convention**: Patterns for documenting non-obvious decisions inline
-- **Commit message convention**: Structured format with type, scope, description, reasoning, and references
-- **Decision recording threshold**: Log any decision where reasoning isn't obvious from code
-- **Code change protocol**: Version bumping rules and README update requirements (includes project-specific examples that should be customized)
+- **Project overview**: What the project does and its primary language/framework
+- **Project structure**: Actual directory layout
+- **Build & test commands**: How to install, test, build, and lint
+- **Testing methodology**: Frameworks, naming conventions, coverage requirements
+- **Code change protocol**: Version bumping rules and locations
+- **Project-specific paths**: Source code, config, generated files, entry points
+- **Test fixtures**: Paths to fixture files, what they contain, file types involved
+- **Cleanup rules**: What generated file types to remove after tests pass
+- **Dependencies & environment**: Required tools, environment variables, external services
 
-The template includes placeholder sections (marked with HTML comments like `<!-- UPDATE THE STRUCTURE ABOVE -->` and `<!-- ADD YOUR PROJECT'S ACTUAL COMMANDS HERE -->`) that should be customized per project.
+All sections contain HTML comment placeholders for customization. The template is consumed by both `write-plan.md` (during pre-investigation) and `execute-plan.md` (passed to subagents and updated post-verification).

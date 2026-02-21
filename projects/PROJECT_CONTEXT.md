@@ -1,8 +1,6 @@
 # PROJECT_CONTEXT.md
 
-This file provides project-specific context for AI agents working on this codebase. It complements `AGENTS.md` which contains the generic agent workflow, documentation structure, and conventions.
-
-Read `AGENTS.md` first for the general framework, then this file for project-specific details.
+This file provides project-specific context for AI agents working on this codebase. It contains project-specific paths, build commands, testing methodology, and environment details. Workflow conventions, documentation structure, and agent protocols are defined in the global command files (`write-plan.md` and `execute-plan.md`).
 
 ## Project Overview
 
@@ -15,7 +13,7 @@ Read `AGENTS.md` first for the general framework, then this file for project-spe
 ```
 ├── src/               # Application source code
 ├── tests/             # Test files
-├── docs/              # Documentation (see AGENTS.md for structure)
+├── docs/              # Documentation (decisions, plans, reports)
 └── README.md          # Project overview
 ```
 
@@ -76,6 +74,33 @@ If your changes add a new feature or change user-facing behavior, update the pro
 - Configuration: `config/`
 - Generated files: `build/`
 - Entry points: `src/main.c`, `src/index.ts`, etc.
+-->
+
+## Test Fixtures
+
+<!-- Document test fixtures and sample data used for validation:
+- Path to fixture files (relative to project root)
+- What each fixture contains and what it's used for
+- File types/formats involved
+- Any setup required before tests can use them
+
+Example:
+- Fixture path: `tests/fixtures/sample_model/`
+- Contents: Sample .obj, .mtl, and .jpg files for 3D model validation
+- Used by: Integration tests in `tests/integration/`
+-->
+
+## Cleanup Rules
+
+<!-- Define what generated files should be cleaned up after tests pass.
+Only list file types or patterns that are GENERATED during testing — not source files.
+
+Example:
+- Delete `*.obj`, `*.mtl`, `*.jpg` files created during testing
+- Do NOT delete source fixtures in `tests/fixtures/`
+- Do NOT delete files listed in handoff reports
+
+If no cleanup is needed, write: "No automated cleanup required."
 -->
 
 ## Dependencies & Environment

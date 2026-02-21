@@ -48,7 +48,7 @@ Then you wait. Depending on the plan's complexity, this can take a while. Go get
 ## What's In This Repo
 
 Along with the prompts and workflow, there are also a few other files I place in the folder of the project I'm working on.
-The AGENTS.md file provides context for any AI agent working on this codebase. It is meant to be read by OpenCode before beginning any task.
+Workflow conventions, documentation structure definitions, and execution protocols live directly inside the global command files (`/write-plan` and `/execute-plan`), making each command self-contained.
 
 The file structure:
 
@@ -58,14 +58,12 @@ ai-prompts/
 │   └── opencode/          # OpenCode configuration, commands, agents, prompts
 │       └── AGENTS.md.template  # Template for local agent config (personal info)
 ├── projects/
-│   ├── AGENTS.md          # Generic agent workflow, docs structure, conventions
 │   └── PROJECT_CONTEXT.md # Project-specific context template (build, paths, testing)
 └── README.md
 ```
 
 - **`global/opencode/`** contains the commands (`/write-plan`, `/execute-plan`, `/chat-summary`, code simplifiers), agents (Devil's Advocate, testing), the Augster system prompt, and OpenCode provider/model configuration. The `AGENTS.md` file is generated locally from `AGENTS.md.template` — it contains personal git config and is gitignored.
-- **`projects/AGENTS.md`** is a generic template you drop into target projects. It establishes the `docs/` folder convention (decisions, plans, reports) and defines investigation protocols, code comment conventions, and commit message formats.
-- **`projects/PROJECT_CONTEXT.md`** is a companion template for project-specific context — build commands, key paths, testing methodology, versioning, and project structure. Drop it alongside `AGENTS.md` and fill in the placeholders for your project.
+- **`projects/PROJECT_CONTEXT.md`** is a template you drop into target projects for project-specific context — build commands, key paths, testing methodology, versioning, and project structure. Fill in the placeholders for your project.
 
 For the full technical details — command specifications, agent behavior rules, docs/ structure, ADR format, report schemas — see [REFERENCE.md](REFERENCE.md).
 
@@ -93,7 +91,7 @@ ln -s ai-prompts/global/opencode/AGENTS.md .
 ln -s ai-prompts/global/opencode/opencode.json .
 ```
 
-For target projects, copy or symlink both `projects/AGENTS.md` and `projects/PROJECT_CONTEXT.md` into the project root. Fill in the `PROJECT_CONTEXT.md` placeholders with your project's specific paths, build commands, and testing details.
+For target projects, copy or symlink `projects/PROJECT_CONTEXT.md` into the project root. Fill in the placeholders with your project's specific paths, build commands, and testing details.
 
 ## Reference
 
