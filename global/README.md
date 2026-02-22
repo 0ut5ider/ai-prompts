@@ -1,16 +1,15 @@
-create a symlink to the location where the files are naturally stored
+# Global Configuration
 
-## Opencode
+## OpenCode
 
-ln -s ai-prompts/opencode/agents/ .
-ln -s ai-prompts/opencode/commands/ .
-ln -s ai-prompts/opencode/AGENTS.md .
-ln -s ai-prompts/opencode/opencode.json .
+Run the install script to install OpenCode config files to `~/.config/opencode/`:
 
+```bash
+./opencode/install.sh
+```
 
+See the [main README](../README.md) for full details.
 
-## Claude code
+## Claude Code
 
-I don't know yet
-
-
+Not yet configured.

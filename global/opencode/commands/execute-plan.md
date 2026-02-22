@@ -95,6 +95,80 @@ Append one row per orchestrator run:
 - Each subagent must start with a clean context — do not carry conversation history between phases/steps.
 - All completion reports and decision logs are stored in `{run_reports_dir}`.
 
+## Mode Detection
+
+Before doing anything else, read the plan file's YAML frontmatter and check the `mode` field.
+
+- **`mode: standard`** (or field absent): proceed with the full orchestration workflow described in this document.
+- **`mode: light`**: skip to the **Light Mode Execution** section below. Do not run ADR creation, do not create a run directory, do not spawn subagents, do not produce handoff reports or a verification subagent.
+
+---
+
+## Light Mode Execution
+
+Light mode is for plans that only touch docs, config files, scaffolding, READMEs, changelogs, or directory structure — no production logic, no tests required.
+
+### What light mode does
+
+1. **Read the plan** completely before making any changes.
+2. **Execute phases sequentially** as a single agent. No subagent delegation.
+3. **Commit after each phase** using the standard commit message format (see Commit Message Convention).
+4. **Write a single changes log** when all phases are complete.
+
+### What light mode skips
+
+- Run directory creation (`docs/reports/{date}-{slug}/`)
+- Run index entry (`docs/reports/index.md`)
+- ADR creation
+- Handoff reports
+- Decision log (`decisions.md`)
+- Plan amendments document
+- Verification subagent
+- `PROJECT_CONTEXT.md` update check
+
+### Git branch rules still apply
+
+Light mode does not exempt the plan from branch discipline. Check the current branch before executing. Never execute on `main`, `master`, or `develop` without explicit user confirmation.
+
+### Changes log
+
+After all phases are complete, write a single file:
+
+**Filename:** `YYYY-MM-DD-{plan-slug}-changes.md`
+**Location:** `docs/reports/`
+
+**Contents:**
+```
+---
+plan: {path-to-plan-file}
+date: YYYY-MM-DD
+mode: light
+---
+
+## What changed
+
+- `{file-path}`: {one-line description of what changed and why}
+- `{file-path}`: ...
+
+## Why
+
+{1-2 sentences on the overall intent of this change}
+```
+
+Commit the changes log alongside the final phase's files, or as a standalone commit if the last phase was already committed:
+
+```
+docs(changes): {plan-slug}
+
+Why: Light mode change log for {plan-slug}.
+```
+
+### Done
+
+After the changes log is committed, light mode execution is complete. No further steps.
+
+---
+
 ## Project Knowledge Sources
 
 This project maintains institutional knowledge in several locations. Before beginning execution, and when subagents need to understand prior context, check these sources:
@@ -130,13 +204,15 @@ docs/
 │   └── ...
 │
 ├── plans/                                  # Implementation plans
-│   ├── feature_<slug>.md                   # Feature plans
-│   └── bug_fix_<slug>.md                   # Bug fix plans
+│   ├── YYYY-MM-DD-feat-<descriptive-slug>-plan.md   # Feature plans
+│   ├── YYYY-MM-DD-fix-<descriptive-slug>-plan.md    # Bug fix plans
+│   └── YYYY-MM-DD-refactor-<descriptive-slug>-plan.md  # Refactor plans
 │
-└── reports/                                # Orchestrator run outputs
-    ├── index.md                            # Master index of all runs
+└── reports/                                # Execution outputs
+    ├── index.md                            # Master index of standard runs
+    ├── YYYY-MM-DD-{plan-slug}-changes.md   # Light mode: single changes log (flat, no subdir)
     │
-    └── {YYYY-MM-DD}-{plan-slug}/           # One directory per orchestrator run
+    └── {YYYY-MM-DD}-{plan-slug}/           # Standard mode: one directory per run
         ├── YYYY-MM-DD-phase-01-<slug>.md   # Handoff report: phase 1
         ├── YYYY-MM-DD-phase-02-<slug>.md   # Handoff report: phase 2
         ├── ...                             # One handoff report per phase
@@ -147,23 +223,25 @@ docs/
 
 ### Who Creates What
 
-| File / Directory | Created by | When |
-|---|---|---|
-| `docs/plans/*.md` | Planning agent | End of planning conversation |
-| `docs/decisions/NNNN-*.md` | Orchestrator | Before Phase 01 (from plan) or during plan amendments (from deviations) |
-| `docs/reports/index.md` | Orchestrator | Start of each run (append one row) |
-| `docs/reports/{date}-{slug}/` | Orchestrator | Start of each run |
-| `*-phase-{NN}-*.md` (handoff) | Subagent | End of each phase |
-| `decisions.md` (run log) | Subagent | End of each phase (append) |
-| `*-plan-amendments.md` | Orchestrator | After all phases, before verification |
-| `*-verification-report.md` | Verification subagent | During post-implementation verification |
+| File / Directory | Mode | Created by | When |
+|---|---|---|---|
+| `docs/plans/*.md` | both | Planning agent | End of planning conversation |
+| `docs/decisions/NNNN-*.md` | standard | Orchestrator | Before Phase 01 (from plan) or during plan amendments (from deviations) |
+| `docs/reports/index.md` | standard | Orchestrator | Start of each run (append one row) |
+| `docs/reports/{date}-{slug}/` | standard | Orchestrator | Start of each run |
+| `*-phase-{NN}-*.md` (handoff) | standard | Subagent | End of each phase |
+| `decisions.md` (run log) | standard | Subagent | End of each phase (append) |
+| `*-plan-amendments.md` | standard | Orchestrator | After all phases, before verification |
+| `*-verification-report.md` | standard | Verification subagent | During post-implementation verification |
+| `docs/reports/*-changes.md` | light | Single agent | After all phases complete |
 
 ### Naming Conventions
 
 - **ADRs**: `NNNN-kebab-case-title.md` — zero-padded four-digit number, sequential. Example: `0003-use-redis-for-caching.md`
-- **Plans**: `feature_<slug>.md` or `bug_fix_<slug>.md` — underscore-separated slug. Example: `feature_texture_pipeline.md`
-- **Run directories**: `{YYYY-MM-DD}-{plan-slug}/` — date prefix, kebab-case slug, max 5 words. Append `-02`, `-03` if the directory already exists.
-- **Handoff reports**: `{YYYY-MM-DD}-phase-{NN}-{phase-slug}.md` — zero-padded two-digit phase number, kebab-case slug max 5 words.
+- **Plans**: `YYYY-MM-DD-<type>-<descriptive-slug>-plan.md` — date prefix, kebab-case, type is `feat`/`fix`/`refactor`, 3-5 word slug. Example: `2026-02-21-feat-texture-pipeline-plan.md`
+- **Run directories** (standard only): `{YYYY-MM-DD}-{plan-slug}/` — date prefix, kebab-case slug, max 5 words. Append `-02`, `-03` if the directory already exists.
+- **Handoff reports** (standard only): `{YYYY-MM-DD}-phase-{NN}-{phase-slug}.md` — zero-padded two-digit phase number, kebab-case slug max 5 words.
+- **Changes log** (light only): `YYYY-MM-DD-{plan-slug}-changes.md` — flat file directly in `docs/reports/`.
 
 ## ADR Immutability
 

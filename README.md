@@ -69,29 +69,28 @@ For the full technical details — command specifications, agent behavior rules,
 
 ## Quick Setup
 
-### Personalization
+### Install
 
-The global OpenCode agent config (`global/opencode/AGENTS.md`) contains git author info and is gitignored. To create your local copy:
-
-```bash
-cp global/opencode/AGENTS.md.template global/opencode/AGENTS.md
-```
-
-Then edit `global/opencode/AGENTS.md` and replace `YOUR_NAME` and `YOUR_EMAIL` with your actual details. This file won't be committed.
-
-### Symlinks
-
-For OpenCode to use this configuration, symlink from your home directory to the appropriate locations:
+Run the install script to set up OpenCode configuration files in `~/.config/opencode/`:
 
 ```bash
-ln -s ai-prompts/global/opencode/agents/ .
-ln -s ai-prompts/global/opencode/commands/ .
-ln -s ai-prompts/global/opencode/prompts/ .
-ln -s ai-prompts/global/opencode/AGENTS.md .
-ln -s ai-prompts/global/opencode/opencode.json .
+./global/opencode/install.sh
 ```
 
-For target projects, copy or symlink `projects/PROJECT_CONTEXT.md` into the project root. Fill in the placeholders with your project's specific paths, build commands, and testing details.
+On first run, the script will:
+1. Copy agents, commands, and prompts to `~/.config/opencode/`
+2. Prompt for your name and email to generate `AGENTS.md` (with git author config)
+3. Copy `opencode_example.json` as `opencode.json` — edit this file to add your API keys and server IP
+
+On subsequent runs, the script updates agents/commands/prompts (backing up existing files) but leaves `AGENTS.md` and `opencode.json` untouched.
+
+**Options:**
+- `--symlink` — Create individual file symlinks instead of copying (edits sync back to the repo)
+- `--copy` — Copy files (default)
+- `--dry-run` — Preview changes without modifying anything
+- `--help` — Show usage
+
+For target projects, copy `projects/PROJECT_CONTEXT.md` into the project root and fill in the placeholders.
 
 ## Reference
 
