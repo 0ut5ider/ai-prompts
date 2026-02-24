@@ -77,16 +77,9 @@ Run the install script to set up OpenCode configuration files in `~/.config/open
 ./global/opencode/install.sh
 ```
 
-On first run, the script will:
-1. Copy agents, commands, and prompts to `~/.config/opencode/`
-2. Prompt for your name and email to generate `AGENTS.md` (with git author config)
-3. Copy `opencode_example.json` as `opencode.json` — edit this file to add your API keys and server IP
-
-On subsequent runs, the script updates agents/commands/prompts (backing up existing files) but leaves `AGENTS.md` and `opencode.json` untouched.
+The script copies `agents/`, `commands/`, `prompts/`, `skills/`, `AGENTS.md`, and `opencode.json` (from `opencode_example.json`) into `~/.config/opencode/`. Every run is a full replace — existing files and directories are backed up to `~/.config/opencode/.backups/<timestamp>/` before being overwritten. Edit the target `opencode.json` with your API keys and server IP.
 
 **Options:**
-- `--symlink` — Create individual file symlinks instead of copying (edits sync back to the repo)
-- `--copy` — Copy files (default)
 - `--dry-run` — Preview changes without modifying anything
 - `--help` — Show usage
 
