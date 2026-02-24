@@ -39,10 +39,10 @@ When asked to do something, just do it - including obvious follow-up actions nee
   implementation)
   - If a README.md file exists, always update it (if changes affect the contents) when making changes to the code. Delegate this task to a subagent.
 
-## Designing software
+## Design principles
 
-- YAGNI. The best code is no code. Don't add features we don't need right now.
-- When it doesn't conflict with YAGNI, architect for extensibility and flexibility.
+- YAGNI. Don't build ahead of current needs — whether that's code, process, or documentation.
+- When it doesn't conflict with YAGNI, design for adaptability.
 
 
 ## Coding Rules

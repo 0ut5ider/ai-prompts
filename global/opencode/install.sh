@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: Installs OpenCode configuration files to ~/.config/opencode/
-# ABOUTME: Backs up existing config to .backups/<timestamp>/ before overwriting
+# ABOUTME: Merges into existing config dirs, backing up only colliding entries
 set -euo pipefail
 
 # ─── Constants ────────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ echo "--------------------------------------------"
 # Create target directory
 ensure_dir "$TARGET_DIR"
 
-# ─── Install subdirectories (full replace) ────────────────────────────────────
+# ─── Install subdirectories (file-level merge) ───────────────────────────────
 for subdir in "${SUBDIRS[@]}"; do
     src_dir="${SCRIPT_DIR}/${subdir}"
     dest_dir="${TARGET_DIR}/${subdir}"
@@ -127,16 +127,33 @@ for subdir in "${SUBDIRS[@]}"; do
         continue
     fi
 
-    # Back up existing target subdir, then replace entirely
-    backup_if_exists "$dest_dir" || true
+    ensure_dir "$dest_dir"
 
-    if $DRY_RUN; then
-        info "(dry-run) Would copy directory $src_dir -> $dest_dir"
-    else
-        cp -r "$src_dir" "$dest_dir"
-        info "Copied directory $src_dir -> $dest_dir"
-    fi
-    ((INSTALLED++)) || true
+    # Iterate over each entry in the source subdir and merge into target
+    for entry in "$src_dir"/*; do
+        [[ -e "$entry" ]] || continue   # skip if glob matched nothing
+        local_name="$(basename "$entry")"
+        dest_entry="${dest_dir}/${local_name}"
+
+        backup_if_exists "$dest_entry" || true
+
+        if $DRY_RUN; then
+            if [[ -d "$entry" ]]; then
+                info "(dry-run) Would copy directory $entry -> $dest_entry"
+            else
+                info "(dry-run) Would copy $entry -> $dest_entry"
+            fi
+        else
+            if [[ -d "$entry" ]]; then
+                cp -r "$entry" "$dest_entry"
+                info "Copied directory $entry -> $dest_entry"
+            else
+                cp "$entry" "$dest_entry"
+                info "Copied $entry -> $dest_entry"
+            fi
+        fi
+        ((INSTALLED++)) || true
+    done
 done
 
 # ─── AGENTS.md ────────────────────────────────────────────────────────────────

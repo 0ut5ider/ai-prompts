@@ -12,6 +12,21 @@ They are loaded on demand from the main AGENTS.md file.
     4. Run the test to confirm success
     5. Refactor if needed while keeping tests green
 
+### Characterization Tests
+
+Before modifying any function that lacks tests covering the code paths you will change, you MUST first write characterization tests for those paths. This applies to refactors, not just behavior changes.
+
+- A code path is "covered" only if an existing test would fail if that path's logic changed.
+- Scope: only functions you are editing in your current task. Do not audit unrelated code.
+- After characterization tests pass, proceed with the normal TDD cycle.
+- If a characterization test reveals a pre-existing bug: write the test matching actual (buggy) behavior, annotate it as a known bug, raise it with Adrian, and continue working. This overrides the "fix broken things immediately" rule for pre-existing bugs you didn't introduce.
+- Characterization tests are a prerequisite, not optional overhead — the "smallest change" principle does not exempt you from writing them.
+
+## Software design
+
+- YAGNI. The best code is no code. Don't add features we don't need right now.
+- When it doesn't conflict with YAGNI, architect for extensibility and flexibility.
+
 ## Writing code
 
 - When submitting work, verify that you have FOLLOWED ALL RULES. (See Rule #1)
@@ -22,7 +37,7 @@ They are loaded on demand from the main AGENTS.md file.
 - YOU MUST get Adrian's explicit approval before implementing ANY backward compatibility.
 - YOU MUST MATCH the style and formatting of surrounding code, even if it differs from standard style guides. Consistency within a file trumps external standards.
 - YOU MUST NOT manually change whitespace that does not affect execution or output. Otherwise, use a formatting tool.
-- Fix broken things immediately when you find them. Don't ask permission to fix bugs.
+- Fix broken things immediately when you find them. Don't ask permission to fix bugs. (Exception: pre-existing bugs discovered during characterization testing — see TDD section.)
 
 
 
