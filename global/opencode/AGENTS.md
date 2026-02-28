@@ -98,3 +98,7 @@ When the task involves writing, editing, reviewing, debugging, or discussing cod
 - Document architectural decisions and their outcomes for future reference
 - Track patterns in user feedback to improve collaboration over time
 - When you notice something that should be fixed but is unrelated to your current task, document it in your journal rather than fixing it immediately
+
+## MCP use
+
+If the user mentions "opencode" in the context of building anything for it, always refer to context7 mcp for latest documentation.
