@@ -56,12 +56,12 @@ The file structure:
 ai-prompts/
 ├── global/
 │   └── opencode/              # Global OpenCode config (agents, commands, prompts, skills)
-│       └── install.sh         # Installs global config to ~/.config/opencode/
 ├── projects/
 │   ├── coding/                # Coding project type
 │   │   ├── compound-engineering/  # Compound Engineering sub-source
 │   │   └── personal/              # Personal customizations sub-source
 │   └── writing/               # Writing project type (empty)
+├── install-global.sh          # Installs global config to ~/.config/opencode/
 ├── install-project.sh         # Installs project configs to a target directory
 └── README.md
 ```
@@ -78,12 +78,15 @@ For the full technical details — command specifications, agent behavior rules,
 Run the install script to set up OpenCode configuration files in `~/.config/opencode/`:
 
 ```bash
-./global/opencode/install.sh
+./install-global.sh
 ```
 
-The script merges `agents/`, `commands/`, `prompts/`, and `skills/` into `~/.config/opencode/`, and copies `AGENTS.md` and `opencode.json` (from `opencode_example.json`). Only files that collide with source entries are backed up to `~/.config/opencode/.backups/<timestamp>/` — other files in those directories (e.g., from other frameworks) are left untouched. Edit the target `opencode.json` with your API keys and server IP.
+The script merges `agents/`, `commands/`, `prompts/`, and `skills/` into `~/.config/opencode/`, and copies `AGENTS.md`. Only files that collide with source entries are backed up to `~/.config/opencode/.backups/<timestamp>/` — other files in those directories (e.g., from other frameworks) are left untouched.
+
+`opencode.json` is only created from `opencode_example.json` on a clean system with no existing config. If `opencode.json` already exists, the script skips it to preserve your API keys and customizations.
 
 **Options:**
+- `--target DIR` — Install to DIR instead of `~/.config/opencode/`
 - `--dry-run` — Preview changes without modifying anything
 - `--help` — Show usage
 
@@ -119,13 +122,36 @@ This reads the registry, creates a dated backup at each destination (`.opencode-
 
 ### Testing
 
-Run the automated test suite to verify the project installer works correctly:
+Both install scripts have automated test suites.
+
+**Global installer:**
+
+```bash
+./test-install-global.sh
+```
+
+Runs 109 assertions across 9 test groups using `--target` to install into temp directories. Exit code 0 means all tests passed.
+
+**Test groups:**
+1. CLI arguments and flag parsing (including `--target` validation)
+2. Clean install — subdirs, content checksums, exact file counts, summary counters
+3. Repeat install — backup, collision handling, opencode.json skip, user file preservation, directory backup
+4. --dry-run mode — no filesystem changes, collision dry-run messages
+5. opencode.json skip behavior — clean vs. existing, content preservation, missing example tolerance
+6. --target flag — custom paths, backup location, file-as-target rejection
+7. Edge cases — missing example file, symlinks, dangling symlinks, paths with spaces
+8. Source directory anomalies — missing source subdirs, empty source subdirs
+9. Idempotency — run 3 produces identical results to run 2
+
+Always run after modifying `install-global.sh`.
+
+**Project installer:**
 
 ```bash
 ./test-install-project.sh
 ```
 
-The script creates temporary fixtures (a `zzz-testbed` project type with two sub-sources designed to exercise all merge and conflict paths), runs 81 assertions across 8 test groups, and cleans up all artifacts on completion. Exit code 0 means all tests passed; non-zero means failures occurred.
+Runs 81 assertions across 8 test groups using temporary fixtures. Exit code 0 means all tests passed.
 
 **Test groups:**
 1. CLI arguments and flag parsing
@@ -139,7 +165,7 @@ The script creates temporary fixtures (a `zzz-testbed` project type with two sub
 
 **Requirements:** `bash` (4.0+), `jq`
 
-Always run the test suite after modifying `install-project.sh` to catch regressions.
+Always run after modifying `install-project.sh`.
 
 For target projects, copy `projects/PROJECT_CONTEXT.md` into the project root and fill in the placeholders.
 
