@@ -117,6 +117,30 @@ This reads the registry, creates a dated backup at each destination (`.opencode-
 
 **Requirements:** `jq`
 
+### Testing
+
+Run the automated test suite to verify the project installer works correctly:
+
+```bash
+./test-install-project.sh
+```
+
+The script creates temporary fixtures (a `zzz-testbed` project type with two sub-sources designed to exercise all merge and conflict paths), runs 81 assertions across 8 test groups, and cleans up all artifacts on completion. Exit code 0 means all tests passed; non-zero means failures occurred.
+
+**Test groups:**
+1. CLI arguments and flag parsing
+2. Install flow — collisions (agents, commands, skills), JSON deep-merge, MD concatenation, manifest accuracy
+3. Re-install collision detection, path validation
+4. Update flow — backup, surgical delete, file restoration, custom file preservation
+5. Source content changes — add/remove/rename files between install and update
+6. Backup completeness — file counts, directory structure, user modification capture
+7. Edge cases — deleted destinations, removed source projects, registry integrity
+8. Empty directory cleanup after surgical updates
+
+**Requirements:** `bash` (4.0+), `jq`
+
+Always run the test suite after modifying `install-project.sh` to catch regressions.
+
 For target projects, copy `projects/PROJECT_CONTEXT.md` into the project root and fill in the placeholders.
 
 ## Reference
