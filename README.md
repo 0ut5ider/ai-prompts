@@ -55,10 +55,14 @@ The file structure:
 ```
 ai-prompts/
 ├── global/
-│   └── opencode/          # OpenCode configuration, commands, agents, prompts
-│       └── AGENTS.md.template  # Template for local agent config (personal info)
+│   └── opencode/              # Global OpenCode config (agents, commands, prompts, skills)
+│       └── install.sh         # Installs global config to ~/.config/opencode/
 ├── projects/
-│   └── PROJECT_CONTEXT.md # Project-specific context template (build, paths, testing)
+│   ├── coding/                # Coding project type
+│   │   ├── compound-engineering/  # Compound Engineering sub-source
+│   │   └── personal/              # Personal customizations sub-source
+│   └── writing/               # Writing project type (empty)
+├── install-project.sh         # Installs project configs to a target directory
 └── README.md
 ```
 
@@ -82,6 +86,36 @@ The script merges `agents/`, `commands/`, `prompts/`, and `skills/` into `~/.con
 **Options:**
 - `--dry-run` — Preview changes without modifying anything
 - `--help` — Show usage
+
+### Project Install
+
+Install project-specific OpenCode configurations (agents, commands, skills) into a target project directory:
+
+```bash
+./install-project.sh
+```
+
+The script will:
+1. Show available project types (e.g., `coding`) — empty types are skipped
+2. Ask for the destination path (creates the directory structure if needed)
+3. Merge content from all sub-sources in alphabetical order (e.g., `compound-engineering` then `personal`)
+4. Record the installation in a hostname-specific registry for future updates
+
+**Merge rules:**
+- **Agents/commands:** All files copied. Name collisions → last source wins (with warning)
+- **Skills:** Entire skill folders copied. Name collisions → last source wins (with warning)
+- **`opencode.json`:** Deep-merged via `jq` (last source wins on key conflicts)
+- **Root `.md` files:** Concatenated with source attribution headers
+
+**Updating existing installs:**
+
+```bash
+./install-project.sh --update
+```
+
+This reads the registry, creates a dated backup at each destination (`.opencode-backups/<timestamp>/`), surgically deletes previously installed files, and pushes a clean merge from current sources. Files not in the manifest are left untouched.
+
+**Requirements:** `jq`
 
 For target projects, copy `projects/PROJECT_CONTEXT.md` into the project root and fill in the placeholders.
 
