@@ -326,6 +326,11 @@ deploy_staging() {
         [[ -f "$file" ]] || continue
         cp -L "$file" "${destination}/$(basename "$file")"
     done
+
+    # Clean up empty directories left behind from staging or prior deletes
+    if [[ -d "${destination}/.opencode" ]]; then
+        find "${destination}/.opencode" -type d -empty -delete 2>/dev/null || true
+    fi
 }
 
 # ─── Backup existing installed files ─────────────────────────────────────────
@@ -367,11 +372,6 @@ delete_installed_files() {
             ((count++)) || true
         fi
     done < <(echo "$manifest_json" | jq -r '.[]')
-
-    # Clean up empty directories left behind (inside .opencode/ only)
-    if [[ -d "${destination}/.opencode" ]]; then
-        find "${destination}/.opencode" -type d -empty -delete 2>/dev/null || true
-    fi
 
     info "Deleted ${count} previously installed files"
 }
