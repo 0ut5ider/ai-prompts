@@ -272,7 +272,7 @@ merge_root_files() {
         local extension="${filename##*.}"
 
         if [[ "$filename" == *.json ]]; then
-            merge_root_json "$staging_dir" "$file" "$sub_source_name"
+            merge_root_json "$staging_dir" "$file" "$sub_source_name" || true
         elif [[ "$extension" == "md" ]]; then
             merge_root_md "$staging_dir" "$file" "$sub_source_name"
         else
