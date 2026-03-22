@@ -1,0 +1,10 @@
+# Global MCP server configuration
+# Shared across all agents — transformed per adapter at install time
+mcp:
+  context7:
+    type: remote
+    url: https://mcp.context7.com/mcp
+  private-journal:
+    type: local
+    command: ["npx", "-y", "github:obra/private-journal-mcp"]
+    enabled: true

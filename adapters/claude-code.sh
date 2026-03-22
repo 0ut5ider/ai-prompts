@@ -19,6 +19,9 @@ SETTINGS_FILE="settings.json"
 # Where the settings file is placed: "root" (project root) or "config_dir" (inside CONFIG_DIR)
 SETTINGS_LOCATION="config_dir"
 
+# Global config directory for this agent (used by global installs)
+GLOBAL_CONFIG_DIR="${HOME}/.claude"
+
 # Subdirectories inside the config dir that this agent supports
 SUPPORTED_SUBDIRS=("agents" "commands" "skills" "rules")
 
