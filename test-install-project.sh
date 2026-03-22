@@ -7,6 +7,7 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALLER="${SCRIPT_DIR}/install-project.sh"
 PROJECTS_DIR="${SCRIPT_DIR}/projects"
+ADAPTERS_DIR="${SCRIPT_DIR}/adapters"
 HOSTNAME_SHORT="$(hostname -s 2>/dev/null || hostname)"
 REGISTRY_FILE="${PROJECTS_DIR}/.install-registry-${HOSTNAME_SHORT}.json"
 
@@ -19,6 +20,11 @@ FIXTURE_DIR="${PROJECTS_DIR}/zzz-testbed"
 PASSED=0
 FAILED=0
 ERRORS=()
+
+# Cached menu numbers (populated by cache_menu_numbers after fixtures exist)
+MENU_NUM_TESTBED=""
+ADAPTER_NUM_OPENCODE=""
+ADAPTER_NUM_CLAUDE_CODE=""
 
 # ─── Test helpers ─────────────────────────────────────────────────────────────
 pass() {
@@ -153,6 +159,29 @@ find_menu_number() {
     echo "$output" | grep -oP '\d+(?=\) '"$target"')' | head -1
 }
 
+# Find the menu number for a given adapter name
+# Adapter menu appears after project type selection, so we pipe project type first
+find_adapter_number() {
+    local target="$1"
+    local project_menu_num="$2"
+    local output
+    output="$(echo -e "${project_menu_num}\nq" | "$INSTALLER" 2>&1 || true)"
+    echo "$output" | grep -oP '\d+(?=\) .* \('"$target"'\))' | head -1
+}
+
+cache_menu_numbers() {
+    # Single installer run: pipe project selection + quit to capture both menus
+    local output
+    output="$(echo "q" | "$INSTALLER" 2>&1 || true)"
+    MENU_NUM_TESTBED="$(echo "$output" | grep -oP '\d+(?=\) zzz-testbed)' | head -1)"
+
+    # Second run: select project type, capture adapter menu
+    local adapter_output
+    adapter_output="$(echo -e "${MENU_NUM_TESTBED}\nq" | "$INSTALLER" 2>&1 || true)"
+    ADAPTER_NUM_OPENCODE="$(echo "$adapter_output" | grep -oP '\d+(?=\) .* \(opencode\))' | head -1)"
+    ADAPTER_NUM_CLAUDE_CODE="$(echo "$adapter_output" | grep -oP '\d+(?=\) .* \(claude-code\))' | head -1)"
+}
+
 clean_registry() {
     rm -f "$REGISTRY_FILE"
 }
@@ -168,93 +197,99 @@ setup_fixtures() {
     # ── Sub-source: alpha (processed first alphabetically) ────────────────
     local ALPHA="${FIXTURE_DIR}/alpha"
 
-    mkdir -p "$ALPHA/.opencode/agents"
+    mkdir -p "$ALPHA/.agent/agents"
     echo -e "# Alpha-Only Agent\nThis agent exists only in alpha." \
-        > "$ALPHA/.opencode/agents/alpha-only-agent.md"
+        > "$ALPHA/.agent/agents/alpha-only-agent.md"
     echo -e "# Shared Agent (ALPHA version)\nIf you see this, bravo did NOT overwrite (BUG)." \
-        > "$ALPHA/.opencode/agents/shared-agent.md"
+        > "$ALPHA/.agent/agents/shared-agent.md"
 
-    mkdir -p "$ALPHA/.opencode/commands"
+    mkdir -p "$ALPHA/.agent/commands"
     echo -e "# Alpha Command\nUnique to alpha." \
-        > "$ALPHA/.opencode/commands/alpha-cmd.md"
+        > "$ALPHA/.agent/commands/alpha-cmd.md"
     echo -e "# Shared Command (ALPHA version)\nShould be overwritten by bravo." \
-        > "$ALPHA/.opencode/commands/shared-cmd.md"
+        > "$ALPHA/.agent/commands/shared-cmd.md"
 
-    mkdir -p "$ALPHA/.opencode/skills/alpha-skill"
+    mkdir -p "$ALPHA/.agent/skills/alpha-skill"
     echo -e "---\nname: alpha-skill\n---\n# Alpha Skill" \
-        > "$ALPHA/.opencode/skills/alpha-skill/SKILL.md"
+        > "$ALPHA/.agent/skills/alpha-skill/SKILL.md"
 
-    mkdir -p "$ALPHA/.opencode/skills/shared-skill"
+    mkdir -p "$ALPHA/.agent/skills/shared-skill"
     echo -e "---\nname: shared-skill\n---\n# Shared Skill (ALPHA version)" \
-        > "$ALPHA/.opencode/skills/shared-skill/SKILL.md"
+        > "$ALPHA/.agent/skills/shared-skill/SKILL.md"
     echo -e "#!/bin/bash\necho 'alpha helper'" \
-        > "$ALPHA/.opencode/skills/shared-skill/helper.sh"
+        > "$ALPHA/.agent/skills/shared-skill/helper.sh"
 
-    cat > "$ALPHA/opencode.json" << 'ENDJSON'
-{
-  "$schema": "https://opencode.ai/config.json",
-  "alpha_key": "from_alpha",
-  "shared_key": "alpha_wins_if_you_see_this",
-  "nested": {
-    "alpha_nested": true,
-    "shared_nested": "alpha_value"
-  }
-}
-ENDJSON
+    # Neutral settings YAML
+    cat > "$ALPHA/settings.yaml" << 'ENDYAML'
+# Alpha settings
+mcp:
+  context7:
+    type: remote
+    url: https://mcp.context7.com/mcp
+    enabled: true
+  alpha-server:
+    type: local
+    command: alpha-mcp
+agents:
+  opencode:
+    alpha_key: from_alpha
+  claude-code:
+    alwaysThinkingEnabled: true
+ENDYAML
 
-    cat > "$ALPHA/AGENTS.md" << 'ENDMD'
+    cat > "$ALPHA/RULES.md" << 'ENDMD'
 # Alpha Rules
 - Rule A1
 - Rule A2
 ENDMD
 
-    echo -e "source: alpha\nkey: alpha_value" > "$ALPHA/config.yaml"
+    echo -e "source: alpha\nkey: alpha_value" > "$ALPHA/config.txt"
     echo '{ this is not valid json' > "$ALPHA/broken.json"
 
     # ── Sub-source: bravo (processed second, wins conflicts) ──────────────
     local BRAVO="${FIXTURE_DIR}/bravo"
 
-    mkdir -p "$BRAVO/.opencode/agents"
+    mkdir -p "$BRAVO/.agent/agents"
     echo -e "# Bravo-Only Agent\nThis agent exists only in bravo." \
-        > "$BRAVO/.opencode/agents/bravo-only-agent.md"
+        > "$BRAVO/.agent/agents/bravo-only-agent.md"
     echo -e "# Shared Agent (BRAVO version)\nYou should see this after install." \
-        > "$BRAVO/.opencode/agents/shared-agent.md"
+        > "$BRAVO/.agent/agents/shared-agent.md"
 
-    mkdir -p "$BRAVO/.opencode/commands"
+    mkdir -p "$BRAVO/.agent/commands"
     echo -e "# Bravo Command\nUnique to bravo." \
-        > "$BRAVO/.opencode/commands/bravo-cmd.md"
+        > "$BRAVO/.agent/commands/bravo-cmd.md"
     echo -e "# Shared Command (BRAVO version)\nYou should see this after install." \
-        > "$BRAVO/.opencode/commands/shared-cmd.md"
+        > "$BRAVO/.agent/commands/shared-cmd.md"
 
-    mkdir -p "$BRAVO/.opencode/skills/bravo-skill"
+    mkdir -p "$BRAVO/.agent/skills/bravo-skill"
     echo -e "---\nname: bravo-skill\n---\n# Bravo Skill" \
-        > "$BRAVO/.opencode/skills/bravo-skill/SKILL.md"
+        > "$BRAVO/.agent/skills/bravo-skill/SKILL.md"
 
-    mkdir -p "$BRAVO/.opencode/skills/shared-skill"
+    mkdir -p "$BRAVO/.agent/skills/shared-skill"
     echo -e "---\nname: shared-skill\n---\n# Shared Skill (BRAVO version)" \
-        > "$BRAVO/.opencode/skills/shared-skill/SKILL.md"
+        > "$BRAVO/.agent/skills/shared-skill/SKILL.md"
     echo -e "#!/bin/bash\necho 'bravo helper'" \
-        > "$BRAVO/.opencode/skills/shared-skill/bravo-helper.sh"
+        > "$BRAVO/.agent/skills/shared-skill/bravo-helper.sh"
 
-    cat > "$BRAVO/opencode.json" << 'ENDJSON'
-{
-  "$schema": "https://opencode.ai/config.json",
-  "bravo_key": "from_bravo",
-  "shared_key": "bravo_wins",
-  "nested": {
-    "bravo_nested": true,
-    "shared_nested": "bravo_value"
-  }
-}
-ENDJSON
+    # Bravo settings — deep-merged with alpha
+    cat > "$BRAVO/settings.yaml" << 'ENDYAML'
+# Bravo settings
+mcp:
+  bravo-server:
+    type: local
+    command: bravo-mcp
+agents:
+  opencode:
+    bravo_key: from_bravo
+ENDYAML
 
-    cat > "$BRAVO/AGENTS.md" << 'ENDMD'
+    cat > "$BRAVO/RULES.md" << 'ENDMD'
 # Bravo Rules
 - Rule B1
 - Rule B2
 ENDMD
 
-    echo -e "source: bravo\nkey: bravo_value" > "$BRAVO/config.yaml"
+    echo -e "source: bravo\nkey: bravo_value" > "$BRAVO/config.txt"
 
     echo "Fixtures created at ${FIXTURE_DIR}"
 }
@@ -297,19 +332,17 @@ test_group_1_cli_arguments() {
     assert_contains "1.4 --update --bogus identifies bad flag" "$output" "--bogus"
 }
 
-test_group_2_install_flow() {
+test_group_2_install_opencode() {
     echo ""
     echo "═══════════════════════════════════════════"
-    echo " Group 2: Install Flow"
+    echo " Group 2: Install Flow (OpenCode adapter)"
     echo "═══════════════════════════════════════════"
 
     clean_registry
-    local menu_num
-    menu_num="$(find_menu_number "zzz-testbed")"
 
-    # Test 2.1: Install testbed to dest-A
+    # Test 2.1: Install testbed to dest-A with opencode adapter
     local output
-    output="$(echo -e "${menu_num}\n${DEST_A}" | "$INSTALLER" 2>&1)"
+    output="$(echo -e "${MENU_NUM_TESTBED}\n${ADAPTER_NUM_OPENCODE}\n${DEST_A}" | "$INSTALLER" 2>&1)"
     local rc=$?
     assert_exit_code "2.1 Install testbed to dest-A exits 0" 0 "$rc"
     assert_contains "2.1 Output shows sub-sources" "$output" "alpha"
@@ -318,7 +351,7 @@ test_group_2_install_flow() {
     # Test 2.2: Empty project types not in menu
     assert_not_contains "2.2 Writing not in menu (empty)" "$output" ") writing"
 
-    # Test 2.3: Agent collision — bravo wins
+    # Test 2.3: Agent collision — bravo wins (files in .opencode/)
     assert_file_contains "2.3 shared-agent has BRAVO content" \
         "${DEST_A}/.opencode/agents/shared-agent.md" "BRAVO version"
     assert_file_not_contains "2.3 shared-agent has no ALPHA content" \
@@ -356,21 +389,27 @@ test_group_2_install_flow() {
     assert_dir_exists "2.8 bravo-skill dir present" \
         "${DEST_A}/.opencode/skills/bravo-skill"
 
-    # Test 2.9: JSON deep-merge
-    assert_json_value "2.9 alpha_key preserved" \
+    # Test 2.9: Settings transformed to opencode.json at root
+    assert_file_exists "2.9 opencode.json created at root" \
+        "${DEST_A}/opencode.json"
+    assert_json_value "2.9 opencode.json has schema" \
+        "${DEST_A}/opencode.json" '."$schema"' "https://opencode.ai/config.json"
+    assert_json_value "2.9 MCP context7 preserved" \
+        "${DEST_A}/opencode.json" ".mcp.context7.url" "https://mcp.context7.com/mcp"
+    assert_json_value "2.9 MCP alpha-server preserved" \
+        "${DEST_A}/opencode.json" '.mcp."alpha-server".command' "alpha-mcp"
+    assert_json_value "2.9 MCP bravo-server deep-merged" \
+        "${DEST_A}/opencode.json" '.mcp."bravo-server".command' "bravo-mcp"
+    assert_json_value "2.9 opencode-specific alpha_key" \
         "${DEST_A}/opencode.json" ".alpha_key" "from_alpha"
-    assert_json_value "2.9 bravo_key preserved" \
+    assert_json_value "2.9 opencode-specific bravo_key" \
         "${DEST_A}/opencode.json" ".bravo_key" "from_bravo"
-    assert_json_value "2.9 shared_key — bravo wins" \
-        "${DEST_A}/opencode.json" ".shared_key" "bravo_wins"
-    assert_json_value "2.9 nested.alpha_nested preserved" \
-        "${DEST_A}/opencode.json" ".nested.alpha_nested" "true"
-    assert_json_value "2.9 nested.bravo_nested preserved" \
-        "${DEST_A}/opencode.json" ".nested.bravo_nested" "true"
-    assert_json_value "2.9 nested.shared_nested — bravo wins" \
-        "${DEST_A}/opencode.json" ".nested.shared_nested" "bravo_value"
 
-    # Test 2.10: AGENTS.md concatenation
+    # Test 2.10: RULES.md → AGENTS.md concatenation
+    assert_file_exists "2.10 AGENTS.md created (not RULES.md)" \
+        "${DEST_A}/AGENTS.md"
+    assert_file_not_exists "2.10 RULES.md not deployed" \
+        "${DEST_A}/RULES.md"
     assert_file_contains "2.10 AGENTS.md has alpha content" \
         "${DEST_A}/AGENTS.md" "Rule A1"
     assert_file_contains "2.10 AGENTS.md has bravo content" \
@@ -381,10 +420,10 @@ test_group_2_install_flow() {
         "${DEST_A}/AGENTS.md" "Source: bravo"
 
     # Test 2.11: Unknown file type collision — bravo wins
-    assert_file_contains "2.11 config.yaml is bravo's version" \
-        "${DEST_A}/config.yaml" "source: bravo"
-    assert_file_not_contains "2.11 config.yaml has no alpha content" \
-        "${DEST_A}/config.yaml" "source: alpha"
+    assert_file_contains "2.11 config.txt is bravo's version" \
+        "${DEST_A}/config.txt" "source: bravo"
+    assert_file_not_contains "2.11 config.txt has no alpha content" \
+        "${DEST_A}/config.txt" "source: alpha"
 
     # Test 2.12: Invalid JSON skipped gracefully
     assert_file_not_exists "2.12 broken.json not deployed" \
@@ -400,188 +439,204 @@ test_group_2_install_flow() {
     disk_count="$(find "$DEST_A" -type f | wc -l | tr -d ' ')"
     assert_eq "2.14 Manifest count matches disk count" "$manifest_count" "$disk_count"
 
-    # Test 2.15: Install to dest-B (independent second install)
-    output="$(echo -e "${menu_num}\n${DEST_B}" | "$INSTALLER" 2>&1)"
-    rc=$?
-    assert_exit_code "2.15 Install to dest-B exits 0" 0 "$rc"
-    assert_file_exists "2.15 dest-B has agents" "${DEST_B}/.opencode/agents/shared-agent.md"
+    # Test 2.15: Registry records adapter
+    assert_json_value "2.15 Registry records adapter name" \
+        "$REGISTRY_FILE" '.installs[0].adapter' "opencode"
+}
 
-    # Test 2.16: Registry has 2 entries
+test_group_3_install_claude_code() {
+    echo ""
+    echo "═══════════════════════════════════════════"
+    echo " Group 3: Install Flow (Claude Code adapter)"
+    echo "═══════════════════════════════════════════"
+
+    # Test 3.1: Install testbed to dest-B with claude-code adapter
+    local output
+    output="$(echo -e "${MENU_NUM_TESTBED}\n${ADAPTER_NUM_CLAUDE_CODE}\n${DEST_B}" | "$INSTALLER" 2>&1)"
+    local rc=$?
+    assert_exit_code "3.1 Install to dest-B with claude-code exits 0" 0 "$rc"
+
+    # Test 3.2: Files deployed to .claude/ (not .opencode/)
+    assert_dir_exists "3.2 .claude/ dir created" "${DEST_B}/.claude"
+    assert_dir_not_exists "3.2 .opencode/ not created" "${DEST_B}/.opencode"
+    assert_file_exists "3.2 agents in .claude/" \
+        "${DEST_B}/.claude/agents/shared-agent.md"
+    assert_file_exists "3.2 commands in .claude/" \
+        "${DEST_B}/.claude/commands/shared-cmd.md"
+
+    # Test 3.3: RULES.md → CLAUDE.md
+    assert_file_exists "3.3 CLAUDE.md created" "${DEST_B}/CLAUDE.md"
+    assert_file_not_exists "3.3 RULES.md not deployed" "${DEST_B}/RULES.md"
+    assert_file_not_exists "3.3 AGENTS.md not created" "${DEST_B}/AGENTS.md"
+    assert_file_contains "3.3 CLAUDE.md has alpha content" \
+        "${DEST_B}/CLAUDE.md" "Rule A1"
+    assert_file_contains "3.3 CLAUDE.md has bravo content" \
+        "${DEST_B}/CLAUDE.md" "Rule B1"
+
+    # Test 3.4: Settings transformed to .claude/settings.json
+    assert_file_exists "3.4 settings.json in .claude/" \
+        "${DEST_B}/.claude/settings.json"
+    assert_file_not_exists "3.4 No opencode.json at root" \
+        "${DEST_B}/opencode.json"
+    assert_json_value "3.4 MCP servers under mcpServers" \
+        "${DEST_B}/.claude/settings.json" ".mcpServers.context7.url" "https://mcp.context7.com/mcp"
+    assert_json_value "3.4 claude-code override applied" \
+        "${DEST_B}/.claude/settings.json" ".alwaysThinkingEnabled" "true"
+
+    # Test 3.5: Registry records claude-code adapter
     local entry_count
     entry_count="$(jq '.installs | length' "$REGISTRY_FILE")"
-    assert_eq "2.16 Registry has 2 entries" "2" "$entry_count"
+    assert_eq "3.5 Registry has 2 entries" "2" "$entry_count"
+    assert_json_value "3.5 Registry records claude-code adapter" \
+        "$REGISTRY_FILE" '.installs[1].adapter' "claude-code"
+
+    # Test 3.6: Skills deployed to .claude/skills/
+    assert_dir_exists "3.6 Skills in .claude/" "${DEST_B}/.claude/skills/alpha-skill"
+    assert_dir_exists "3.6 Skills in .claude/" "${DEST_B}/.claude/skills/bravo-skill"
 }
 
-test_group_3_collision_detection() {
+test_group_4_collision_detection() {
     echo ""
     echo "═══════════════════════════════════════════"
-    echo " Group 3: Re-install Collision Detection"
+    echo " Group 4: Re-install Collision Detection"
     echo "═══════════════════════════════════════════"
 
-    local menu_num
-    menu_num="$(find_menu_number "zzz-testbed")"
-
-    # Test 3.1: Same dest, same type — blocked
+    # Test 4.1: Same dest, same type — blocked
     local output rc
-    output="$(echo -e "${menu_num}\n${DEST_A}" | "$INSTALLER" 2>&1)" && rc=$? || rc=$?
-    assert_exit_code "3.1 Re-install same dest exits 1" 1 "$rc"
-    assert_contains "3.1 Error says already installed" "$output" "already has"
-    assert_contains "3.1 Error suggests --update" "$output" "--update"
+    output="$(echo -e "${MENU_NUM_TESTBED}\n${ADAPTER_NUM_OPENCODE}\n${DEST_A}" | "$INSTALLER" 2>&1)" && rc=$? || rc=$?
+    assert_exit_code "4.1 Re-install same dest exits 1" 1 "$rc"
+    assert_contains "4.1 Error says already installed" "$output" "already has"
+    assert_contains "4.1 Error suggests --update" "$output" "--update"
 
-    # Test 3.2: Relative path rejected
-    output="$(echo -e "${menu_num}\nrelative/path" | "$INSTALLER" 2>&1)" && rc=$? || rc=$?
-    assert_exit_code "3.2 Relative path exits 1" 1 "$rc"
-    assert_contains "3.2 Error about absolute path" "$output" "absolute path"
+    # Test 4.2: Relative path rejected
+    output="$(echo -e "${MENU_NUM_TESTBED}\n${ADAPTER_NUM_OPENCODE}\nrelative/path" | "$INSTALLER" 2>&1)" && rc=$? || rc=$?
+    assert_exit_code "4.2 Relative path exits 1" 1 "$rc"
+    assert_contains "4.2 Error about absolute path" "$output" "absolute path"
 
-    # Test 3.3: Non-existent path — created automatically
+    # Test 4.3: Non-existent path — created automatically
     local new_dest="${TEST_DIR}/auto-created"
-    output="$(echo -e "${menu_num}\n${new_dest}" | "$INSTALLER" 2>&1)"
+    output="$(echo -e "${MENU_NUM_TESTBED}\n${ADAPTER_NUM_OPENCODE}\n${new_dest}" | "$INSTALLER" 2>&1)"
     rc=$?
-    assert_exit_code "3.3 Non-existent path exits 0" 0 "$rc"
-    assert_dir_exists "3.3 Destination was created" "$new_dest"
-    assert_file_exists "3.3 Files installed to new dest" "${new_dest}/.opencode/agents/shared-agent.md"
+    assert_exit_code "4.3 Non-existent path exits 0" 0 "$rc"
+    assert_dir_exists "4.3 Destination was created" "$new_dest"
+    assert_file_exists "4.3 Files installed to new dest" "${new_dest}/.opencode/agents/shared-agent.md"
 }
 
-test_group_4_update_flow() {
+test_group_5_update_flow() {
     echo ""
     echo "═══════════════════════════════════════════"
-    echo " Group 4: Update Flow"
+    echo " Group 5: Update Flow"
     echo "═══════════════════════════════════════════"
 
-    # Test 4.1: Modify a file at dest-A
+    # Test 5.1: Modify a file at dest-A (opencode install)
     echo "THIS FILE WAS MODIFIED BY THE USER" > "${DEST_A}/.opencode/agents/shared-agent.md"
-    assert_file_contains "4.1 File modified at dest-A" \
+    assert_file_contains "5.1 File modified at dest-A" \
         "${DEST_A}/.opencode/agents/shared-agent.md" "MODIFIED BY THE USER"
 
-    # Test 4.2: Add custom user files (not in manifest)
+    # Test 5.2: Add custom user files (not in manifest)
     echo "# Custom Agent" > "${DEST_A}/.opencode/agents/my-custom-agent.md"
     echo "# Custom Command" > "${DEST_A}/.opencode/commands/my-custom-command.md"
 
-    # Test 4.3: Run update
+    # Test 5.3: Modify a file at dest-B (claude-code install)
+    echo "THIS FILE WAS MODIFIED BY THE USER" > "${DEST_B}/.claude/agents/shared-agent.md"
+
+    # Test 5.4: Run update — should update both opencode and claude-code installs
     local output
     output="$("$INSTALLER" --update 2>&1)"
     local rc=$?
-    assert_exit_code "4.3 --update exits 0" 0 "$rc"
+    assert_exit_code "5.4 --update exits 0" 0 "$rc"
 
-    # Test 4.4: Backup created at dest-A
+    # Test 5.5: Backup created at dest-A
     local backup_count
-    backup_count="$(find "${DEST_A}/.opencode-backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
-    [[ "$backup_count" -ge 1 ]] && pass "4.4 Backup directory created" \
-        || fail "4.4 Backup directory created" "no backup dirs found"
+    backup_count="$(find "${DEST_A}/.agent-backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
+    [[ "$backup_count" -ge 1 ]] && pass "5.5 Backup directory created at dest-A" \
+        || fail "5.5 Backup directory created at dest-A" "no backup dirs found"
 
-    # Test 4.5: Backup contains MODIFIED version (not source)
+    # Test 5.6: Backup contains MODIFIED version (not source)
     local backup_dir
-    backup_dir="$(find "${DEST_A}/.opencode-backups" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
-    assert_file_contains "4.5 Backup has user's modified content" \
+    backup_dir="$(find "${DEST_A}/.agent-backups" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
+    assert_file_contains "5.6 Backup has user's modified content" \
         "${backup_dir}/.opencode/agents/shared-agent.md" "MODIFIED BY THE USER"
 
-    # Test 4.6: File restored to source version after update
-    assert_file_contains "4.6 shared-agent restored to BRAVO version" \
+    # Test 5.7: File restored to source version after update
+    assert_file_contains "5.7 shared-agent restored to BRAVO version" \
         "${DEST_A}/.opencode/agents/shared-agent.md" "BRAVO version"
-    assert_file_not_contains "4.6 Modified content gone" \
+    assert_file_not_contains "5.7 Modified content gone" \
         "${DEST_A}/.opencode/agents/shared-agent.md" "MODIFIED BY THE USER"
 
-    # Test 4.7: Custom user files NOT deleted (surgical manifest-based delete)
-    assert_file_exists "4.7 Custom agent survives update" \
+    # Test 5.8: Custom user files NOT deleted (surgical manifest-based delete)
+    assert_file_exists "5.8 Custom agent survives update" \
         "${DEST_A}/.opencode/agents/my-custom-agent.md"
-    assert_file_exists "4.7 Custom command survives update" \
+    assert_file_exists "5.8 Custom command survives update" \
         "${DEST_A}/.opencode/commands/my-custom-command.md"
 
-    # Test 4.8: dest-B also updated (backup created)
-    local dest_b_backups
-    dest_b_backups="$(find "${DEST_B}/.opencode-backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
-    [[ "$dest_b_backups" -ge 1 ]] && pass "4.8 dest-B backup created" \
-        || fail "4.8 dest-B backup created" "no backup dirs at dest-B"
+    # Test 5.9: dest-B (claude-code) also updated
+    assert_file_contains "5.9 dest-B claude-code restored after update" \
+        "${DEST_B}/.claude/agents/shared-agent.md" "BRAVO version"
+    assert_file_not_contains "5.9 dest-B modified content gone" \
+        "${DEST_B}/.claude/agents/shared-agent.md" "MODIFIED BY THE USER"
 
-    # Test 4.9: Registry timestamps updated
-    # Note: installed_at and updated_at may be equal if both ran within the same second.
-    # The meaningful check is that updated_at >= installed_at and that the manifest was refreshed.
+    # Test 5.10: dest-B backup created
+    local dest_b_backups
+    dest_b_backups="$(find "${DEST_B}/.agent-backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l | tr -d ' ')"
+    [[ "$dest_b_backups" -ge 1 ]] && pass "5.10 dest-B backup created" \
+        || fail "5.10 dest-B backup created" "no backup dirs at dest-B"
+
+    # Test 5.11: Registry timestamps updated
     local installed_at updated_at
     installed_at="$(jq -r '.installs[0].installed_at' "$REGISTRY_FILE")"
     updated_at="$(jq -r '.installs[0].updated_at' "$REGISTRY_FILE")"
     if [[ "$updated_at" > "$installed_at" || "$updated_at" == "$installed_at" ]]; then
-        pass "4.9 updated_at >= installed_at"
+        pass "5.11 updated_at >= installed_at"
     else
-        fail "4.9 updated_at >= installed_at" "installed=${installed_at} updated=${updated_at}"
+        fail "5.11 updated_at >= installed_at" "installed=${installed_at} updated=${updated_at}"
     fi
 }
 
-test_group_5_source_changes() {
+test_group_6_source_changes() {
     echo ""
     echo "═══════════════════════════════════════════"
-    echo " Group 5: Source Content Changes"
+    echo " Group 6: Source Content Changes"
     echo "═══════════════════════════════════════════"
 
-    # Test 5.1: Add new file to source, update, verify it appears
+    # Test 6.1: Add new file to source, update, verify it appears in both installs
     echo -e "# New Agent\nAdded after install." \
-        > "${FIXTURE_DIR}/bravo/.opencode/agents/new-after-install.md"
+        > "${FIXTURE_DIR}/bravo/.agent/agents/new-after-install.md"
     "$INSTALLER" --update &>/dev/null
-    assert_file_exists "5.1 New agent appears after update" \
+    assert_file_exists "6.1 New agent appears in opencode dest" \
         "${DEST_A}/.opencode/agents/new-after-install.md"
+    assert_file_exists "6.1 New agent appears in claude-code dest" \
+        "${DEST_B}/.claude/agents/new-after-install.md"
 
-    # Test 5.2: Remove file from source, update, verify it's gone
-    rm "${FIXTURE_DIR}/alpha/.opencode/agents/alpha-only-agent.md"
+    # Test 6.2: Remove file from source, update, verify it's gone from both
+    rm "${FIXTURE_DIR}/alpha/.agent/agents/alpha-only-agent.md"
     "$INSTALLER" --update &>/dev/null
-    assert_file_not_exists "5.2 Removed agent gone after update" \
+    assert_file_not_exists "6.2 Removed agent gone from opencode" \
         "${DEST_A}/.opencode/agents/alpha-only-agent.md"
+    assert_file_not_exists "6.2 Removed agent gone from claude-code" \
+        "${DEST_B}/.claude/agents/alpha-only-agent.md"
 
-    # Test 5.3: Removed file is in backup
+    # Test 6.3: Removed file is in backup
     local backup_dir
-    backup_dir="$(find "${DEST_A}/.opencode-backups" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
-    assert_file_exists "5.3 Removed agent preserved in backup" \
+    backup_dir="$(find "${DEST_A}/.agent-backups" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
+    assert_file_exists "6.3 Removed agent preserved in backup" \
         "${backup_dir}/.opencode/agents/alpha-only-agent.md"
 
-    # Test 5.4: Rename file in source, update, verify old gone + new present
-    mv "${FIXTURE_DIR}/bravo/.opencode/commands/bravo-cmd.md" \
-       "${FIXTURE_DIR}/bravo/.opencode/commands/renamed-cmd.md"
+    # Test 6.4: Rename file in source, update, verify old gone + new present
+    mv "${FIXTURE_DIR}/bravo/.agent/commands/bravo-cmd.md" \
+       "${FIXTURE_DIR}/bravo/.agent/commands/renamed-cmd.md"
     "$INSTALLER" --update &>/dev/null
-    assert_file_not_exists "5.4 Old filename gone after rename" \
+    assert_file_not_exists "6.4 Old filename gone after rename" \
         "${DEST_A}/.opencode/commands/bravo-cmd.md"
-    assert_file_exists "5.4 New filename present after rename" \
+    assert_file_exists "6.4 New filename present after rename" \
         "${DEST_A}/.opencode/commands/renamed-cmd.md"
 
     # Restore source files for subsequent tests
     echo -e "# Alpha-Only Agent\nThis agent exists only in alpha." \
-        > "${FIXTURE_DIR}/alpha/.opencode/agents/alpha-only-agent.md"
-    mv "${FIXTURE_DIR}/bravo/.opencode/commands/renamed-cmd.md" \
-       "${FIXTURE_DIR}/bravo/.opencode/commands/bravo-cmd.md"
-    rm -f "${FIXTURE_DIR}/bravo/.opencode/agents/new-after-install.md"
-}
-
-test_group_6_backup_completeness() {
-    echo ""
-    echo "═══════════════════════════════════════════"
-    echo " Group 6: Backup Completeness"
-    echo "═══════════════════════════════════════════"
-
-    # Count manifest-tracked files at dest-B before update
-    local pre_update_manifest_count
-    pre_update_manifest_count="$(jq -r '[.installs[] | select(.destination == "'"${DEST_B}"'")] | .[0].manifest | length' "$REGISTRY_FILE")"
-
-    # Run a clean update cycle to get a fresh backup
-    sleep 1
-    "$INSTALLER" --update &>/dev/null
-
-    local backup_dir
-    backup_dir="$(find "${DEST_B}/.opencode-backups" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
-
-    # Test 6.1: Backup file count matches pre-update manifest
-    local backup_file_count
-    backup_file_count="$(find "$backup_dir" -type f | wc -l | tr -d ' ')"
-    assert_eq "6.1 Backup count matches pre-update manifest" "$pre_update_manifest_count" "$backup_file_count"
-
-    # Test 6.2: Backup preserves directory structure
-    assert_dir_exists "6.2 Backup has .opencode/agents/" "${backup_dir}/.opencode/agents"
-    assert_dir_exists "6.2 Backup has .opencode/commands/" "${backup_dir}/.opencode/commands"
-    assert_dir_exists "6.2 Backup has .opencode/skills/" "${backup_dir}/.opencode/skills"
-
-    # Test 6.3: Backup captures user modifications
-    echo "MODIFIED FOR BACKUP TEST" > "${DEST_B}/.opencode/agents/shared-agent.md"
-    sleep 1
-    "$INSTALLER" --update &>/dev/null
-    backup_dir="$(find "${DEST_B}/.opencode-backups" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)"
-    assert_file_contains "6.3 Backup has modified content" \
-        "${backup_dir}/.opencode/agents/shared-agent.md" "MODIFIED FOR BACKUP TEST"
+        > "${FIXTURE_DIR}/alpha/.agent/agents/alpha-only-agent.md"
+    mv "${FIXTURE_DIR}/bravo/.agent/commands/renamed-cmd.md" \
+       "${FIXTURE_DIR}/bravo/.agent/commands/bravo-cmd.md"
+    rm -f "${FIXTURE_DIR}/bravo/.agent/agents/new-after-install.md"
 }
 
 test_group_7_edge_cases() {
@@ -632,19 +687,21 @@ test_group_8_empty_dir_cleanup() {
     local mini_project="${PROJECTS_DIR}/zzz-minitest"
     local mini_dest="${TEST_DIR}/dest-mini"
     mkdir -p "$mini_dest"
-    mkdir -p "${mini_project}/only-source/.opencode/agents"
-    echo "# Temp Agent" > "${mini_project}/only-source/.opencode/agents/temp-agent.md"
+    mkdir -p "${mini_project}/only-source/.agent/agents"
+    echo "# Temp Agent" > "${mini_project}/only-source/.agent/agents/temp-agent.md"
 
     local menu_num
     menu_num="$(find_menu_number "zzz-minitest")"
-    echo -e "${menu_num}\n${mini_dest}" | "$INSTALLER" &>/dev/null
+    local adapter_num
+    adapter_num="$(find_adapter_number "opencode" "$menu_num")"
+    echo -e "${menu_num}\n${adapter_num}\n${mini_dest}" | "$INSTALLER" &>/dev/null
 
     # Test 8.1: Agent installed
     assert_file_exists "8.1 temp-agent installed" \
         "${mini_dest}/.opencode/agents/temp-agent.md"
 
     # Remove agent from source and update
-    rm "${mini_project}/only-source/.opencode/agents/temp-agent.md"
+    rm "${mini_project}/only-source/.agent/agents/temp-agent.md"
     "$INSTALLER" --update &>/dev/null
 
     # Test 8.2: Empty agents/ dir cleaned up
@@ -652,6 +709,27 @@ test_group_8_empty_dir_cleanup() {
         "${mini_dest}/.opencode/agents"
 
     rm -rf "$mini_project"
+}
+
+test_group_9_adapter_settings_transform() {
+    echo ""
+    echo "═══════════════════════════════════════════"
+    echo " Group 9: Settings YAML Transform"
+    echo "═══════════════════════════════════════════"
+
+    # Test 9.1: OpenCode settings have MCP servers merged from both sources
+    assert_json_value "9.1 OpenCode has 3 MCP servers" \
+        "${DEST_A}/opencode.json" '.mcp | length' "3"
+
+    # Test 9.2: settings.yaml not deployed to destination
+    assert_file_not_exists "9.2 settings.yaml not at dest-A" \
+        "${DEST_A}/settings.yaml"
+
+    # Test 9.3: opencode-specific overrides applied
+    assert_json_value "9.3 opencode alpha_key override" \
+        "${DEST_A}/opencode.json" ".alpha_key" "from_alpha"
+    assert_json_value "9.3 opencode bravo_key override" \
+        "${DEST_A}/opencode.json" ".bravo_key" "from_bravo"
 }
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -665,10 +743,12 @@ main() {
     echo ""
 
     # Check dependencies
-    if ! command -v jq &>/dev/null; then
-        echo "[ERROR] jq is required. Install it and try again."
-        exit 1
-    fi
+    for dep in jq yq; do
+        if ! command -v "$dep" &>/dev/null; then
+            echo "[ERROR] ${dep} is required. Install it and try again."
+            exit 1
+        fi
+    done
 
     if [[ ! -x "$INSTALLER" ]]; then
         echo "[ERROR] Installer not found or not executable: $INSTALLER"
@@ -676,15 +756,17 @@ main() {
     fi
 
     setup_fixtures
+    cache_menu_numbers
 
     test_group_1_cli_arguments
-    test_group_2_install_flow
-    test_group_3_collision_detection
-    test_group_4_update_flow
-    test_group_5_source_changes
-    test_group_6_backup_completeness
+    test_group_2_install_opencode
+    test_group_3_install_claude_code
+    test_group_4_collision_detection
+    test_group_5_update_flow
+    test_group_6_source_changes
     test_group_7_edge_cases
     test_group_8_empty_dir_cleanup
+    test_group_9_adapter_settings_transform
 
     teardown_fixtures
 

@@ -1,0 +1,17 @@
+# Neutral settings for compound-engineering project type.
+# Transformed to agent-specific format (opencode.json, settings.json, etc.) at install time.
+
+# MCP servers — shared across all agents
+mcp:
+  context7:
+    type: remote
+    url: https://mcp.context7.com/mcp
+    enabled: true
+
+# Agent-specific overrides (merged only when installing for that agent)
+# agents:
+#   opencode:
+#     lsp:
+#       enabled: true
+#   claude-code:
+#     alwaysThinkingEnabled: true
