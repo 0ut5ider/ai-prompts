@@ -2,7 +2,7 @@
 
 This repo exists because I kept doing the same things over and over in my AI-assisted coding sessions — and doing them inconsistently. Planning conversations that lost context. Execution runs that forgot what the planning phase decided. Decision records that lived only in chat history. So I codified the patterns that worked and threw away the ones that didn't.
 
-Everything here is built around [OpenCode](https://opencode.ai), which is what I use daily. But the ideas — the two-phase workflow, the separation of planning from execution, the obsessive context isolation — are tool-agnostic. You could adapt this to Claude Code, Cursor, Aider, or whatever comes next. There's even an empty `global/claude/` directory waiting for when I get around to that.
+Everything here is built around [OpenCode](https://opencode.ai), which is what I use daily, and [Claude Code](https://docs.anthropic.com/en/docs/claude-code), which is also supported. But the ideas — the two-phase workflow, the separation of planning from execution, the obsessive context isolation — are tool-agnostic. The project installer uses an adapter system that can deploy to any AI agent, and adding support for a new one (Cursor, Aider, etc.) requires only a single adapter file.
 
 ## The Workflow
 
@@ -54,45 +54,69 @@ The file structure:
 
 ```
 ai-prompts/
-├── global/
-│   └── opencode/              # Global OpenCode config (agents, commands, prompts, skills)
+├── adapters/                  # Agent adapter scripts (one per AI agent)
+│   ├── opencode.sh                # OpenCode: .opencode/, AGENTS.md, opencode.json
+│   └── claude-code.sh             # Claude Code: .claude/, CLAUDE.md, settings.json
+├── lib/                       # Shared functions used by both installers
+│   ├── adapters.sh                # Adapter loading, validation, dependency checks
+│   └── merge.sh                   # Merge, transform, deploy, backup functions
+├── global/                    # Global config source (neutral format)
+│   ├── .agent/                    # agents/, commands/, prompts/, skills/
+│   ├── credentials/               # Agent-specific credential templates
+│   ├── RULES.md                   # Global rules (transformed per agent)
+│   └── settings.yaml              # Global settings (MCP config, transformed per agent)
 ├── projects/
 │   ├── coding/                # Coding project type
 │   │   ├── compound-engineering/  # Compound Engineering sub-source
+│   │   │   ├── .agent/            # Neutral format: agents/, commands/, skills/
+│   │   │   └── settings.yaml      # Neutral settings (transformed per agent)
 │   │   └── personal/              # Personal customizations sub-source
 │   └── writing/               # Writing project type (empty)
-├── install-global.sh          # Installs global config to ~/.config/opencode/
+├── docs/
+│   ├── decisions/             # Architecture decision records
+│   └── plan/                  # Implementation plans
+├── install-global.sh          # Installs global config (multi-agent, manifest-tracked)
 ├── install-project.sh         # Installs project configs to a target directory
 └── README.md
 ```
 
-- **`global/opencode/`** contains the commands (`/write-plan`, `/execute-plan`, `/chat-summary`, code simplifiers), agents (Devil's Advocate, testing), the Augster system prompt, and OpenCode provider/model configuration. The `AGENTS.md` file is generated locally from `AGENTS.md.template` — it contains personal git config and is gitignored.
+- **`global/`** contains global agent configuration in the same neutral format as project sources. Commands (`/write-plan`, `/execute-plan`, `/chat-summary`), agents (thinking partner, testing), the Augster system prompt, and skills are stored under `.agent/`. Credential templates (e.g., OpenCode provider config with empty API keys) live in `credentials/` and are only deployed on first install.
+- **`lib/`** contains shared functions used by both installers — adapter loading/validation, merge logic, settings transformation, manifest building, and deployment. Both scripts source these files rather than duplicating the code.
 - **`projects/PROJECT_CONTEXT.md`** is a template you drop into target projects for project-specific context — build commands, key paths, testing methodology, versioning, and project structure. Fill in the placeholders for your project.
 
 For the full technical details — command specifications, agent behavior rules, docs/ structure, ADR format, report schemas — see [REFERENCE.md](REFERENCE.md).
 
 ## Quick Setup
 
-### Install
+### Global Install
 
-Run the install script to set up OpenCode configuration files in `~/.config/opencode/`:
+Install global AI agent configuration (agents, commands, prompts, skills) to the agent's config directory:
 
 ```bash
 ./install-global.sh
 ```
 
-The script merges `agents/`, `commands/`, `prompts/`, and `skills/` into `~/.config/opencode/`, and copies `AGENTS.md`. Only files that collide with source entries are backed up to `~/.config/opencode/.backups/<timestamp>/` — other files in those directories (e.g., from other frameworks) are left untouched.
+The script will prompt you to select an agent (OpenCode or Claude Code), then deploy global configuration to the agent's default location:
 
-`opencode.json` is only created from `opencode_example.json` on a clean system with no existing config. If `opencode.json` already exists, the script skips it to preserve your API keys and customizations.
+| Agent | Destination |
+|-------|-------------|
+| OpenCode | `~/.config/opencode/` |
+| Claude Code | `~/.claude/` |
+
+Content is stored in a neutral format (`global/.agent/`, `RULES.md`, `settings.yaml`) and transformed at install time — the same adapter system used by the project installer. Credential templates (provider config with empty API keys) are deployed only on first install to avoid overwriting existing API keys.
+
+The installer writes an `.agent-manifest.json` file at the destination, enabling surgical updates that only touch managed files.
 
 **Options:**
-- `--target DIR` — Install to DIR instead of `~/.config/opencode/`
+- `--agent NAME` — Skip the menu and install for a specific agent (e.g., `opencode`, `claude-code`)
+- `--target DIR` — Install to DIR instead of the agent's default location
+- `--update` — Update existing global installations using their manifests
 - `--dry-run` — Preview changes without modifying anything
 - `--help` — Show usage
 
 ### Project Install
 
-Install project-specific OpenCode configurations (agents, commands, skills) into a target project directory:
+Install project-specific AI agent configurations (agents, commands, skills) into a target project directory:
 
 ```bash
 ./install-project.sh
@@ -100,14 +124,24 @@ Install project-specific OpenCode configurations (agents, commands, skills) into
 
 The script will:
 1. Show available project types (e.g., `coding`) — empty types are skipped
-2. Ask for the destination path (creates the directory structure if needed)
-3. Merge content from all sub-sources in alphabetical order (e.g., `compound-engineering` then `personal`)
-4. Record the installation in a hostname-specific registry for future updates
+2. Show available agents (e.g., `OpenCode`, `Claude Code`) — select which agent to install for
+3. Ask for the destination path (creates the directory structure if needed)
+4. Merge content from all sub-sources in alphabetical order (e.g., `compound-engineering` then `personal`)
+5. Transform neutral `settings.yaml` into the agent-specific format and deploy
+6. Record the installation (including which adapter was used) in a hostname-specific registry
+
+**Source format:** Project content is stored in a neutral format (`.agent/` directories, `RULES.md`, `settings.yaml`). At install time, the selected adapter transforms this to the agent's conventions:
+
+| Neutral | OpenCode | Claude Code |
+|---------|----------|-------------|
+| `.agent/` | `.opencode/` | `.claude/` |
+| `RULES.md` | `AGENTS.md` | `CLAUDE.md` |
+| `settings.yaml` | `opencode.json` (at root) | `.claude/settings.json` |
 
 **Merge rules:**
 - **Agents/commands:** All files copied. Name collisions → last source wins (with warning)
 - **Skills:** Entire skill folders copied. Name collisions → last source wins (with warning)
-- **`opencode.json`:** Deep-merged via `jq` (last source wins on key conflicts)
+- **`settings.yaml`:** Deep-merged via `yq`, then transformed to agent-specific JSON
 - **Root `.md` files:** Concatenated with source attribution headers
 
 **Updating existing installs:**
@@ -116,9 +150,11 @@ The script will:
 ./install-project.sh --update
 ```
 
-This reads the registry, creates a dated backup at each destination (`.opencode-backups/<timestamp>/`), surgically deletes previously installed files, and pushes a clean merge from current sources. Files not in the manifest are left untouched.
+This reads the registry, loads the correct adapter for each install, creates a dated backup at each destination (`.agent-backups/<timestamp>/`), surgically deletes previously installed files, and pushes a clean merge from current sources. Files not in the manifest are left untouched.
 
-**Requirements:** `jq`
+**Adding a new agent:** Create a single adapter file in `adapters/` (see existing adapters for the contract). The installer discovers adapters automatically.
+
+**Requirements:** `jq`, `yq`
 
 ### Testing
 
@@ -130,20 +166,20 @@ Both install scripts have automated test suites.
 ./test-install-global.sh
 ```
 
-Runs 109 assertions across 9 test groups using `--target` to install into temp directories. Exit code 0 means all tests passed.
+Runs 81 assertions across 9 test groups using self-contained test fixtures. Exit code 0 means all tests passed.
 
 **Test groups:**
-1. CLI arguments and flag parsing (including `--target` validation)
-2. Clean install — subdirs, content checksums, exact file counts, summary counters
-3. Repeat install — backup, collision handling, opencode.json skip, user file preservation, directory backup
-4. --dry-run mode — no filesystem changes, collision dry-run messages
-5. opencode.json skip behavior — clean vs. existing, content preservation, missing example tolerance
-6. --target flag — custom paths, backup location, file-as-target rejection
-7. Edge cases — missing example file, symlinks, dangling symlinks, paths with spaces
-8. Source directory anomalies — missing source subdirs, empty source subdirs
-9. Idempotency — run 3 produces identical results to run 2
+1. CLI arguments (`--help`, `--agent`, `--update`, unknown flags)
+2. Clean install — OpenCode (RULES.md→AGENTS.md, all subdirs including prompts, settings transform, credential template)
+3. Clean install — Claude Code (RULES.md→CLAUDE.md, prompts excluded, flat layout, no credential template)
+4. Re-install / collision handling (overwrite, credential preservation, user file survival)
+5. Dry-run mode
+6. Manifest tracking (valid JSON, correct fields, excludes self and backups)
+7. Update mode (new files appear, removed files disappear, backups created, user files survive)
+8. Edge cases (empty subdirs, auto-created paths, spaces in paths)
+9. Idempotency
 
-Always run after modifying `install-global.sh`.
+Always run after modifying `install-global.sh` or `lib/`.
 
 **Project installer:**
 
@@ -151,21 +187,22 @@ Always run after modifying `install-global.sh`.
 ./test-install-project.sh
 ```
 
-Runs 81 assertions across 8 test groups using temporary fixtures. Exit code 0 means all tests passed.
+Runs 103 assertions across 9 test groups using temporary fixtures. Exit code 0 means all tests passed.
 
 **Test groups:**
 1. CLI arguments and flag parsing
-2. Install flow — collisions (agents, commands, skills), JSON deep-merge, MD concatenation, manifest accuracy
-3. Re-install collision detection, path validation
-4. Update flow — backup, surgical delete, file restoration, custom file preservation
-5. Source content changes — add/remove/rename files between install and update
-6. Backup completeness — file counts, directory structure, user modification capture
+2. Install flow (OpenCode adapter) — collisions, settings transform, RULES.md→AGENTS.md, manifest accuracy
+3. Install flow (Claude Code adapter) — .claude/ structure, CLAUDE.md, settings.json placement, mcpServers mapping
+4. Re-install collision detection, path validation
+5. Update flow — backup, surgical delete, file restoration, custom file preservation, multi-adapter updates
+6. Source content changes — add/remove/rename files between install and update (verified across both adapters)
 7. Edge cases — deleted destinations, removed source projects, registry integrity
 8. Empty directory cleanup after surgical updates
+9. Settings YAML transform — MCP server merging, agent-specific overrides, neutral file removal
 
-**Requirements:** `bash` (4.0+), `jq`
+**Requirements:** `bash` (4.0+), `jq`, `yq`
 
-Always run after modifying `install-project.sh`.
+Always run after modifying `install-project.sh` or `lib/`.
 
 For target projects, copy `projects/PROJECT_CONTEXT.md` into the project root and fill in the placeholders.
 
