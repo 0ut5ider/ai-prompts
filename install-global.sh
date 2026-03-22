@@ -5,10 +5,11 @@ set -euo pipefail
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_DIR="${SCRIPT_DIR}/global/opencode"
 TARGET_DIR="${HOME}/.config/opencode"
 DRY_RUN=false
+CUSTOM_TARGET=false
 TIMESTAMP="$(date +%Y-%m-%dT%H-%M-%S)"
-BACKUP_DIR="${TARGET_DIR}/.backups/${TIMESTAMP}"
 
 # Counters
 INSTALLED=0
@@ -26,10 +27,11 @@ Usage: $(basename "$0") [OPTIONS]
 Install OpenCode configuration files to ~/.config/opencode/
 
 Options:
+  --target DIR  Install to DIR instead of ~/.config/opencode/
   --dry-run     Print what would be done without making changes
   --help        Show this help message
 
-Source directory: ${SCRIPT_DIR}
+Source directory: ${SOURCE_DIR}
 Target directory: ${TARGET_DIR}
 EOF
     exit 0
@@ -38,6 +40,12 @@ EOF
 # ─── Parse arguments ─────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --target)
+            if [[ -z "${2:-}" || "${2:-}" == --* ]]; then
+                echo "Error: --target requires a directory argument"
+                exit 1
+            fi
+            TARGET_DIR="$2"; CUSTOM_TARGET=true; shift 2 ;;
         --dry-run) DRY_RUN=true;   shift ;;
         --help)    usage ;;
         *)
@@ -47,6 +55,9 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Compute BACKUP_DIR after argument parsing (TARGET_DIR may have changed)
+BACKUP_DIR="${TARGET_DIR}/.backups/${TIMESTAMP}"
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 info()  { echo "[INFO]  $*"; }
@@ -109,7 +120,7 @@ install_file() {
 echo "============================================"
 echo " OpenCode Config Installer"
 echo "============================================"
-echo "Source:    $SCRIPT_DIR"
+echo "Source:    $SOURCE_DIR"
 echo "Target:    $TARGET_DIR"
 echo "Dry run:   $DRY_RUN"
 echo "--------------------------------------------"
@@ -119,7 +130,7 @@ ensure_dir "$TARGET_DIR"
 
 # ─── Install subdirectories (file-level merge) ───────────────────────────────
 for subdir in "${SUBDIRS[@]}"; do
-    src_dir="${SCRIPT_DIR}/${subdir}"
+    src_dir="${SOURCE_DIR}/${subdir}"
     dest_dir="${TARGET_DIR}/${subdir}"
 
     if [[ ! -d "$src_dir" ]]; then
@@ -158,18 +169,21 @@ done
 
 # ─── AGENTS.md ────────────────────────────────────────────────────────────────
 echo "--------------------------------------------"
-install_file "${SCRIPT_DIR}/AGENTS.md" "${TARGET_DIR}/AGENTS.md"
+install_file "${SOURCE_DIR}/AGENTS.md" "${TARGET_DIR}/AGENTS.md"
 
 # ─── opencode.json ────────────────────────────────────────────────────────────
 OPENCODE_TARGET="${TARGET_DIR}/opencode.json"
-OPENCODE_EXAMPLE="${SCRIPT_DIR}/opencode_example.json"
+OPENCODE_EXAMPLE="${SOURCE_DIR}/opencode_example.json"
 
-if [[ ! -f "$OPENCODE_EXAMPLE" ]]; then
-    echo "[ERROR] Example config not found: $OPENCODE_EXAMPLE"
-    exit 1
+if [[ -f "$OPENCODE_TARGET" ]]; then
+    skip "opencode.json already exists at $OPENCODE_TARGET — keeping existing config"
+else
+    if [[ ! -f "$OPENCODE_EXAMPLE" ]]; then
+        echo "[ERROR] Example config not found: $OPENCODE_EXAMPLE"
+        exit 1
+    fi
+    install_file "$OPENCODE_EXAMPLE" "$OPENCODE_TARGET"
 fi
-
-install_file "$OPENCODE_EXAMPLE" "$OPENCODE_TARGET"
 
 # ─── Summary ──────────────────────────────────────────────────────────────────
 echo "============================================"

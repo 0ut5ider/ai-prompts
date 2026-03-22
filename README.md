@@ -55,10 +55,14 @@ The file structure:
 ```
 ai-prompts/
 ├── global/
-│   └── opencode/          # OpenCode configuration, commands, agents, prompts
-│       └── AGENTS.md.template  # Template for local agent config (personal info)
+│   └── opencode/              # Global OpenCode config (agents, commands, prompts, skills)
 ├── projects/
-│   └── PROJECT_CONTEXT.md # Project-specific context template (build, paths, testing)
+│   ├── coding/                # Coding project type
+│   │   ├── compound-engineering/  # Compound Engineering sub-source
+│   │   └── personal/              # Personal customizations sub-source
+│   └── writing/               # Writing project type (empty)
+├── install-global.sh          # Installs global config to ~/.config/opencode/
+├── install-project.sh         # Installs project configs to a target directory
 └── README.md
 ```
 
@@ -74,14 +78,94 @@ For the full technical details — command specifications, agent behavior rules,
 Run the install script to set up OpenCode configuration files in `~/.config/opencode/`:
 
 ```bash
-./global/opencode/install.sh
+./install-global.sh
 ```
 
-The script merges `agents/`, `commands/`, `prompts/`, and `skills/` into `~/.config/opencode/`, and copies `AGENTS.md` and `opencode.json` (from `opencode_example.json`). Only files that collide with source entries are backed up to `~/.config/opencode/.backups/<timestamp>/` — other files in those directories (e.g., from other frameworks) are left untouched. Edit the target `opencode.json` with your API keys and server IP.
+The script merges `agents/`, `commands/`, `prompts/`, and `skills/` into `~/.config/opencode/`, and copies `AGENTS.md`. Only files that collide with source entries are backed up to `~/.config/opencode/.backups/<timestamp>/` — other files in those directories (e.g., from other frameworks) are left untouched.
+
+`opencode.json` is only created from `opencode_example.json` on a clean system with no existing config. If `opencode.json` already exists, the script skips it to preserve your API keys and customizations.
 
 **Options:**
+- `--target DIR` — Install to DIR instead of `~/.config/opencode/`
 - `--dry-run` — Preview changes without modifying anything
 - `--help` — Show usage
+
+### Project Install
+
+Install project-specific OpenCode configurations (agents, commands, skills) into a target project directory:
+
+```bash
+./install-project.sh
+```
+
+The script will:
+1. Show available project types (e.g., `coding`) — empty types are skipped
+2. Ask for the destination path (creates the directory structure if needed)
+3. Merge content from all sub-sources in alphabetical order (e.g., `compound-engineering` then `personal`)
+4. Record the installation in a hostname-specific registry for future updates
+
+**Merge rules:**
+- **Agents/commands:** All files copied. Name collisions → last source wins (with warning)
+- **Skills:** Entire skill folders copied. Name collisions → last source wins (with warning)
+- **`opencode.json`:** Deep-merged via `jq` (last source wins on key conflicts)
+- **Root `.md` files:** Concatenated with source attribution headers
+
+**Updating existing installs:**
+
+```bash
+./install-project.sh --update
+```
+
+This reads the registry, creates a dated backup at each destination (`.opencode-backups/<timestamp>/`), surgically deletes previously installed files, and pushes a clean merge from current sources. Files not in the manifest are left untouched.
+
+**Requirements:** `jq`
+
+### Testing
+
+Both install scripts have automated test suites.
+
+**Global installer:**
+
+```bash
+./test-install-global.sh
+```
+
+Runs 109 assertions across 9 test groups using `--target` to install into temp directories. Exit code 0 means all tests passed.
+
+**Test groups:**
+1. CLI arguments and flag parsing (including `--target` validation)
+2. Clean install — subdirs, content checksums, exact file counts, summary counters
+3. Repeat install — backup, collision handling, opencode.json skip, user file preservation, directory backup
+4. --dry-run mode — no filesystem changes, collision dry-run messages
+5. opencode.json skip behavior — clean vs. existing, content preservation, missing example tolerance
+6. --target flag — custom paths, backup location, file-as-target rejection
+7. Edge cases — missing example file, symlinks, dangling symlinks, paths with spaces
+8. Source directory anomalies — missing source subdirs, empty source subdirs
+9. Idempotency — run 3 produces identical results to run 2
+
+Always run after modifying `install-global.sh`.
+
+**Project installer:**
+
+```bash
+./test-install-project.sh
+```
+
+Runs 81 assertions across 8 test groups using temporary fixtures. Exit code 0 means all tests passed.
+
+**Test groups:**
+1. CLI arguments and flag parsing
+2. Install flow — collisions (agents, commands, skills), JSON deep-merge, MD concatenation, manifest accuracy
+3. Re-install collision detection, path validation
+4. Update flow — backup, surgical delete, file restoration, custom file preservation
+5. Source content changes — add/remove/rename files between install and update
+6. Backup completeness — file counts, directory structure, user modification capture
+7. Edge cases — deleted destinations, removed source projects, registry integrity
+8. Empty directory cleanup after surgical updates
+
+**Requirements:** `bash` (4.0+), `jq`
+
+Always run after modifying `install-project.sh`.
 
 For target projects, copy `projects/PROJECT_CONTEXT.md` into the project root and fill in the placeholders.
 

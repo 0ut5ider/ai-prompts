@@ -99,6 +99,24 @@ When the task involves writing, editing, reviewing, debugging, or discussing cod
 - Track patterns in user feedback to improve collaboration over time
 - When you notice something that should be fixed but is unrelated to your current task, document it in your journal rather than fixing it immediately
 
+## Testing
+
+This repo has automated test suites that MUST be run when modifying the associated scripts.
+
+### install-project.sh
+
+When modifying `install-project.sh`, YOU MUST run the test suite before committing:
+
+```bash
+./test-install-project.sh
+```
+
+- The test suite has 81 assertions covering install, update, merge conflicts, backup, and edge cases.
+- All tests MUST pass (exit code 0) before committing changes to install-project.sh.
+- If you add new functionality to install-project.sh, YOU MUST add corresponding tests to test-install-project.sh covering that functionality.
+- If you fix a bug in install-project.sh, YOU MUST add a regression test to test-install-project.sh that would have caught it.
+- The test script is self-contained: it creates temporary fixtures, runs all tests, and cleans up on completion. It does NOT modify real project data.
+
 ## MCP use
 
 If the user mentions "opencode" in the context of building anything for it, always refer to context7 mcp for latest documentation.
