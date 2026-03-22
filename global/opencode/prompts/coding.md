@@ -3,6 +3,18 @@
 These rules apply to all coding tasks: writing, editing, reviewing, debugging, and discussing code.
 They are loaded on demand from the main AGENTS.md file.
 
+### My Coding Workflow
+I do not write code. AI agents implement all changes. I only review plans and test results.
+
+### Prioritization Rules
+When suggesting features, changes, or review items, never sort by human coding effort. Sort by:
+1. Dependency order (what unblocks other work)
+2. Verification difficulty (easiest for me to confirm correctness first)
+3. Risk of subtle bugs or incorrect implementation
+4. Scope of blast radius if implemented wrong
+
+When estimating effort, describe it in terms of: number of files touched, likelihood of needing multiple iterations, and how hard it is to test — not developer-hours.
+
 ## Test Driven Development  (TDD)
  
 - FOR EVERY NEW FEATURE OR BUGFIX, YOU MUST follow Test Driven Development :

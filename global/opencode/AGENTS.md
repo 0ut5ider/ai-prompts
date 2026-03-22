@@ -27,7 +27,6 @@ Rule #1: If you want exception to ANY rule, YOU MUST STOP and get explicit permi
   together before implementation. Routine fixes and clear implementations don't need
   discussion.
 
-
 # Proactiveness
 
 When asked to do something, just do it - including obvious follow-up actions needed to complete the task properly.
@@ -44,13 +43,25 @@ When asked to do something, just do it - including obvious follow-up actions nee
 - YAGNI. Don't build ahead of current needs — whether that's code, process, or documentation.
 - When it doesn't conflict with YAGNI, design for adaptability.
 
-
 ## Coding Rules
 
-When the task involves writing, editing, reviewing, debugging, or discussing code, YOU MUST load and follow the rules in @prompts/coding.md using your Read tool.
+When the task involves writing, editing, reviewing, debugging, or discussing code, YOU MUST load and follow the rules in ~/.config/opencode/prompts/coding.md using your Read tool.
+
+### My Workflow
+I do not write code. AI agents implement all changes. I only review plans and test results.
+
+### Prioritization Rules
+When suggesting features, changes, or review items, never sort by human coding effort. Sort by:
+1. Dependency order (what unblocks other work)
+2. Verification difficulty (easiest for me to confirm correctness first)
+3. Risk of subtle bugs or incorrect implementation
+4. Scope of blast radius if implemented wrong
+
+When estimating effort, describe it in terms of: number of files touched, likelihood of needing multiple iterations, and how hard it is to test — not developer-hours.
 
 ## Version Control
 
+- Every project should be version controlled. If the conversation seems like it's becoming a project, ask the user about initializing git.
 - If the project isn't in a git repo, STOP and ask permission to initialize one.
 - YOU MUST STOP and ask how to handle uncommitted changes or untracked files when starting work.  Suggest committing existing work first.
 - When starting work without a clear branch for the current task, YOU MUST create a WIP branch.
@@ -80,11 +91,6 @@ When the task involves writing, editing, reviewing, debugging, or discussing cod
   ```
 - Types: feat, fix, docs, style, refactor, perf, test, chore
 - When initializing new git repositories, use the identity from `git config --global user.name` and `git config --global user.email`. If these are not set, STOP and ask the user to configure their git identity before proceeding.
-
-## MCP Server Usage
-
-- Use context7 MCP server whenever the user requests the docs or documentation to be read.
-- Use context7 MCP server whenever specific knowledge is required that context7 can provide. Err on the side of using context7 instead of not using it.
 
 ## Issue tracking
 
@@ -117,6 +123,8 @@ When modifying `install-project.sh`, YOU MUST run the test suite before committi
 - If you fix a bug in install-project.sh, YOU MUST add a regression test to test-install-project.sh that would have caught it.
 - The test script is self-contained: it creates temporary fixtures, runs all tests, and cleans up on completion. It does NOT modify real project data.
 
-## MCP use
+## MCP Server Usage
 
-If the user mentions "opencode" in the context of building anything for it, always refer to context7 mcp for latest documentation.
+- If the user mentions "opencode" in the context of building anything for it, always refer to context7 mcp for latest documentation.
+- Use context7 MCP server whenever the user requests the docs or documentation to be read.
+- Use context7 MCP server whenever specific knowledge is required that context7 can provide. Err on the side of using context7 instead of not using it.
