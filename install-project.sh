@@ -1,22 +1,40 @@
 #!/usr/bin/env bash
-# ABOUTME: Installs OpenCode project configurations (agents, commands, skills) from this repo into a target project.
+# ABOUTME: Installs project configurations (agents, commands, skills) from this repo into a target project.
+# ABOUTME: Supports multiple AI agents (OpenCode, Claude Code, etc.) via adapter system.
 # ABOUTME: Supports install (with merge from multiple sub-sources) and update (with backup and clean push).
 set -euo pipefail
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECTS_DIR="${SCRIPT_DIR}/projects"
+ADAPTERS_DIR="${SCRIPT_DIR}/adapters"
 HOSTNAME_SHORT="$(hostname -s 2>/dev/null || hostname)"
 REGISTRY_FILE="${PROJECTS_DIR}/.install-registry-${HOSTNAME_SHORT}.json"
 TIMESTAMP="$(date +%Y-%m-%dT%H-%M-%S)"
 
-# Directories inside .opencode/ that get merged
-OPENCODE_SUBDIRS=("agents" "commands" "skills")
+# Neutral source directory name (inside sub-sources)
+NEUTRAL_CONFIG_DIR=".agent"
+# Neutral rules file name (at sub-source root)
+NEUTRAL_RULES_FILE="RULES.md"
+# Neutral settings file name (at sub-source root)
+NEUTRAL_SETTINGS_FILE="settings.yaml"
+
+# Default adapter for legacy registry entries (before multi-adapter support)
+DEFAULT_ADAPTER="opencode"
+
+# ─── Adapter state (populated by load_adapter) ──────────────────────────────
+ADAPTER_NAME=""
+ADAPTER_LABEL=""
+CONFIG_DIR=""
+RULES_FILE=""
+SETTINGS_FILE=""
+SETTINGS_LOCATION=""  # "root" or "config_dir"
+SUPPORTED_SUBDIRS=()
 
 # ─── Dependency check ─────────────────────────────────────────────────────────
 check_dependencies() {
     local missing=()
-    for cmd in jq; do
+    for cmd in jq yq; do
         if ! command -v "$cmd" &>/dev/null; then
             missing+=("$cmd")
         fi
@@ -33,16 +51,17 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Install or update OpenCode project configurations.
+Install or update AI agent project configurations.
 
 Modes:
-  (default)     Interactive install — pick a project type and destination
+  (default)     Interactive install — pick a project type, agent, and destination
   --update      Update all previously installed destinations from source
 
 Options:
   --help        Show this help message
 
 Source directory: ${PROJECTS_DIR}
+Adapters:        ${ADAPTERS_DIR}
 Registry file:   ${REGISTRY_FILE}
 EOF
     exit 0
@@ -68,6 +87,65 @@ warn()    { echo "[WARN]    $*"; }
 error()   { echo "[ERROR]   $*" >&2; }
 conflict(){ echo "[CONFLICT] $*"; }
 
+# ─── Adapter functions ────────────────────────────────────────────────────────
+discover_adapters() {
+    local adapters=()
+    for file in "${ADAPTERS_DIR}"/*.sh; do
+        [[ -f "$file" ]] || continue
+        local name
+        name="$(basename "$file" .sh)"
+        adapters+=("$name")
+    done
+    printf '%s\n' "${adapters[@]}"
+}
+
+load_adapter() {
+    local adapter_name="$1"
+    local adapter_file="${ADAPTERS_DIR}/${adapter_name}.sh"
+
+    if [[ ! -f "$adapter_file" ]]; then
+        error "Adapter '${adapter_name}' not found at '${adapter_file}'"
+        exit 1
+    fi
+
+    # Reset state from any previously loaded adapter
+    ADAPTER_NAME=""
+    ADAPTER_LABEL=""
+    CONFIG_DIR=""
+    RULES_FILE=""
+    SETTINGS_FILE=""
+    SETTINGS_LOCATION=""
+    SUPPORTED_SUBDIRS=()
+    unset -f transform_settings 2>/dev/null || true
+
+    # shellcheck source=/dev/null
+    source "$adapter_file"
+
+    # Validate adapter contract
+    local missing_fields=()
+    [[ -z "$ADAPTER_NAME" ]]  && missing_fields+=("ADAPTER_NAME")
+    [[ -z "$ADAPTER_LABEL" ]] && missing_fields+=("ADAPTER_LABEL")
+    [[ -z "$CONFIG_DIR" ]]    && missing_fields+=("CONFIG_DIR")
+    [[ -z "$RULES_FILE" ]]    && missing_fields+=("RULES_FILE")
+    [[ -z "$SETTINGS_FILE" ]] && missing_fields+=("SETTINGS_FILE")
+    [[ -z "$SETTINGS_LOCATION" ]] && missing_fields+=("SETTINGS_LOCATION")
+    [[ ${#SUPPORTED_SUBDIRS[@]} -eq 0 ]] && missing_fields+=("SUPPORTED_SUBDIRS")
+
+    if ! declare -f transform_settings &>/dev/null; then
+        missing_fields+=("transform_settings()")
+    fi
+
+    if [[ ${#missing_fields[@]} -gt 0 ]]; then
+        error "Adapter '${adapter_name}' is missing required fields: ${missing_fields[*]}"
+        exit 1
+    fi
+
+    if [[ "$SETTINGS_LOCATION" != "root" && "$SETTINGS_LOCATION" != "config_dir" ]]; then
+        error "Adapter '${adapter_name}' has invalid SETTINGS_LOCATION='${SETTINGS_LOCATION}' (must be 'root' or 'config_dir')"
+        exit 1
+    fi
+}
+
 # ─── Registry functions ──────────────────────────────────────────────────────
 registry_init() {
     if [[ ! -f "$REGISTRY_FILE" ]]; then
@@ -85,19 +163,22 @@ registry_find_entry() {
 registry_add_entry() {
     local project="$1"
     local destination="$2"
-    local sources_json="$3"
-    local manifest_json="$4"
+    local adapter="$3"
+    local sources_json="$4"
+    local manifest_json="$5"
 
     local tmp
     tmp="$(mktemp)"
     jq --arg proj "$project" \
        --arg dest "$destination" \
+       --arg adap "$adapter" \
        --arg ts "$TIMESTAMP" \
        --argjson sources "$sources_json" \
        --argjson manifest "$manifest_json" \
        '.installs += [{
             project: $proj,
             destination: $dest,
+            adapter: $adap,
             sources: $sources,
             installed_at: $ts,
             updated_at: $ts,
@@ -142,34 +223,31 @@ discover_project_types() {
             types+=("$name")
         fi
     done
-    echo "${types[@]}"
+    printf '%s\n' "${types[@]}"
 }
 
 discover_sub_sources() {
     local project_dir="$1"
     local sources=()
-    for dir in "$project_dir"/*/; do
-        [[ -d "$dir" ]] || continue
+    while IFS= read -r -d '' dir; do
         sources+=("$(basename "$dir")")
-    done
-    # Sort alphabetically for deterministic ordering
-    IFS=$'\n' sources=($(sort <<<"${sources[*]}")); unset IFS
-    echo "${sources[@]}"
+    done < <(find "$project_dir" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+    printf '%s\n' "${sources[@]}"
 }
 
 # ─── Merge functions ─────────────────────────────────────────────────────────
 
-# Merge .opencode/ subdirectory contents (agents/, commands/, skills/)
+# Merge .agent/ subdirectory contents (agents/, commands/, skills/, rules/)
 # Strategy: copy all files. On name collision, last source wins with warning.
 # Skills are entire directories — last source wins on directory name collision.
-merge_opencode_subdir() {
+merge_config_subdir() {
     local subdir_name="$1"
     local staging_dir="$2"
     local source_dir="$3"
     local sub_source_name="$4"
 
-    local src="${source_dir}/.opencode/${subdir_name}"
-    local dest="${staging_dir}/.opencode/${subdir_name}"
+    local src="${source_dir}/${NEUTRAL_CONFIG_DIR}/${subdir_name}"
+    local dest="${staging_dir}/${CONFIG_DIR}/${subdir_name}"
 
     [[ -d "$src" ]] || return 0
 
@@ -188,7 +266,7 @@ merge_opencode_subdir() {
             cp -rL "$skill_dir" "${dest}/${skill_name}"
         done
     else
-        # agents/ and commands/ — copy individual files
+        # agents/, commands/, rules/ — copy individual files
         for file in "$src"/*; do
             [[ -e "$file" ]] || continue
             local filename
@@ -201,13 +279,20 @@ merge_opencode_subdir() {
     fi
 }
 
-# Merge root-level .md files by concatenation with source headers
+# Merge root-level .md files by concatenation with source headers.
+# Handles RULES.md → agent-specific rules file rename.
 merge_root_md() {
     local staging_dir="$1"
     local source_file="$2"
     local sub_source_name="$3"
     local filename
     filename="$(basename "$source_file")"
+
+    # Map neutral RULES.md to agent-specific name
+    if [[ "$filename" == "$NEUTRAL_RULES_FILE" ]]; then
+        filename="$RULES_FILE"
+    fi
+
     local dest="${staging_dir}/${filename}"
 
     local header="<!-- ═══════════════════════════════════════════════════════════ -->
@@ -227,26 +312,39 @@ merge_root_md() {
     fi
 }
 
-# Deep-merge root-level JSON files using jq
-merge_root_json() {
+# Deep-merge root-level structured files (JSON or YAML).
+# Args: staging_dir source_file sub_source_name format
+#   format: "json" or "yaml"
+merge_root_structured() {
     local staging_dir="$1"
     local source_file="$2"
     local sub_source_name="$3"
+    local format="$4"
     local filename
     filename="$(basename "$source_file")"
     local dest="${staging_dir}/${filename}"
 
-    # Validate source JSON
-    if ! jq empty "$source_file" 2>/dev/null; then
-        error "Invalid JSON in '${source_file}' from '${sub_source_name}' — skipping"
-        return 1
+    # Validate source file
+    if [[ "$format" == "json" ]]; then
+        if ! jq empty "$source_file" 2>/dev/null; then
+            error "Invalid JSON in '${source_file}' from '${sub_source_name}' — skipping"
+            return 1
+        fi
+    else
+        if ! yq '.' "$source_file" &>/dev/null; then
+            error "Invalid YAML in '${source_file}' from '${sub_source_name}' — skipping"
+            return 1
+        fi
     fi
 
     if [[ -f "$dest" ]]; then
-        # Deep merge: existing * new (new wins on conflicts)
         local tmp
         tmp="$(mktemp)"
-        jq -s '.[0] * .[1]' "$dest" "$source_file" > "$tmp"
+        if [[ "$format" == "json" ]]; then
+            jq -s '.[0] * .[1]' "$dest" "$source_file" > "$tmp"
+        else
+            yq eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' "$dest" "$source_file" > "$tmp"
+        fi
         mv "$tmp" "$dest"
         info "Deep-merged '${filename}' with content from '${sub_source_name}'"
     else
@@ -271,10 +369,14 @@ merge_root_files() {
 
         local extension="${filename##*.}"
 
-        if [[ "$filename" == *.json ]]; then
-            merge_root_json "$staging_dir" "$file" "$sub_source_name" || true
+        if [[ "$filename" == "$NEUTRAL_SETTINGS_FILE" ]]; then
+            merge_root_structured "$staging_dir" "$file" "$sub_source_name" "yaml" || true
+        elif [[ "$filename" == *.json ]]; then
+            merge_root_structured "$staging_dir" "$file" "$sub_source_name" "json" || true
         elif [[ "$extension" == "md" ]]; then
             merge_root_md "$staging_dir" "$file" "$sub_source_name"
+        elif [[ "$extension" == "yaml" || "$extension" == "yml" ]]; then
+            merge_root_structured "$staging_dir" "$file" "$sub_source_name" "yaml" || true
         else
             # Unknown file type — last source wins with warning
             if [[ -f "${staging_dir}/${filename}" ]]; then
@@ -289,36 +391,47 @@ merge_root_files() {
 # ─── Build file manifest from staging directory ──────────────────────────────
 build_manifest() {
     local staging_dir="$1"
-    local manifest=()
 
-    while IFS= read -r -d '' file; do
-        local rel="${file#"${staging_dir}"/}"
-        manifest+=("\"${rel}\"")
-    done < <(find "$staging_dir" -type f -print0 | sort -z)
+    find "$staging_dir" -type f -print0 | sort -z | \
+        while IFS= read -r -d '' file; do
+            printf '%s\n' "${file#"${staging_dir}"/}"
+        done | jq -Rs 'split("\n") | map(select(. != ""))'
+}
 
-    local json="["
-    local first=true
-    for entry in "${manifest[@]}"; do
-        if $first; then
-            json+="${entry}"
-            first=false
+# ─── Transform settings in staging ────────────────────────────────────────────
+# Replaces neutral settings.yaml with the agent-specific settings file.
+# Must be called before build_manifest() so the manifest reflects final filenames.
+transform_staging_settings() {
+    local staging_dir="$1"
+
+    if [[ ! -f "${staging_dir}/${NEUTRAL_SETTINGS_FILE}" ]]; then
+        return 0
+    fi
+
+    local transformed_settings
+    transformed_settings="$(transform_settings "${staging_dir}/${NEUTRAL_SETTINGS_FILE}")"
+    rm "${staging_dir}/${NEUTRAL_SETTINGS_FILE}"
+
+    if [[ "$transformed_settings" != "{}" ]]; then
+        if [[ "$SETTINGS_LOCATION" == "root" ]]; then
+            echo "$transformed_settings" > "${staging_dir}/${SETTINGS_FILE}"
         else
-            json+=",${entry}"
+            echo "$transformed_settings" > "${staging_dir}/${CONFIG_DIR}/${SETTINGS_FILE}"
         fi
-    done
-    json+="]"
-    echo "$json"
+    fi
 }
 
 # ─── Deploy from staging to destination ───────────────────────────────────────
+# Copies staged files to the destination directory.
+# Assumes settings have already been transformed via transform_staging_settings().
 deploy_staging() {
     local staging_dir="$1"
     local destination="$2"
 
-    # Copy .opencode/ contents
-    if [[ -d "${staging_dir}/.opencode" ]]; then
-        mkdir -p "${destination}/.opencode"
-        cp -rL "${staging_dir}/.opencode/." "${destination}/.opencode/"
+    # Copy config directory contents
+    if [[ -d "${staging_dir}/${CONFIG_DIR}" ]]; then
+        mkdir -p "${destination}/${CONFIG_DIR}"
+        cp -rL "${staging_dir}/${CONFIG_DIR}/." "${destination}/${CONFIG_DIR}/"
     fi
 
     # Copy root-level files
@@ -328,8 +441,8 @@ deploy_staging() {
     done
 
     # Clean up empty directories left behind from staging or prior deletes
-    if [[ -d "${destination}/.opencode" ]]; then
-        find "${destination}/.opencode" -type d -empty -delete 2>/dev/null || true
+    if [[ -d "${destination}/${CONFIG_DIR}" ]]; then
+        find "${destination}/${CONFIG_DIR}" -type d -empty -delete 2>/dev/null || true
     fi
 }
 
@@ -337,7 +450,7 @@ deploy_staging() {
 backup_installed_files() {
     local destination="$1"
     local manifest_json="$2"
-    local backup_dir="${destination}/.opencode-backups/${TIMESTAMP}"
+    local backup_dir="${destination}/.agent-backups/${TIMESTAMP}"
 
     info "Creating backup at: ${backup_dir}"
     mkdir -p "$backup_dir"
@@ -379,20 +492,18 @@ delete_installed_files() {
 # ─── Main: Install mode ──────────────────────────────────────────────────────
 do_install() {
     echo "============================================"
-    echo " OpenCode Project Installer"
+    echo " AI Agent Project Installer"
     echo "============================================"
 
     # Discover project types
-    local types_str
-    types_str="$(discover_project_types)"
-    if [[ -z "$types_str" ]]; then
+    local project_types=()
+    mapfile -t project_types < <(discover_project_types)
+    if [[ ${#project_types[@]} -eq 0 ]]; then
         error "No project types found in ${PROJECTS_DIR}"
         exit 1
     fi
 
-    read -ra project_types <<< "$types_str"
-
-    # Present menu
+    # Present project type menu
     echo ""
     echo "Available project types:"
     echo "--------------------------------------------"
@@ -403,7 +514,7 @@ do_install() {
     done
     echo ""
 
-    # Get user selection
+    # Get project type selection
     local selection
     while true; do
         read -rp "Select project type [1-${#project_types[@]}]: " selection
@@ -416,6 +527,41 @@ do_install() {
     local project_type="${project_types[$((selection - 1))]}"
     local project_dir="${PROJECTS_DIR}/${project_type}"
     info "Selected project type: ${project_type}"
+
+    # Discover and present agent adapters
+    local available_adapters=()
+    mapfile -t available_adapters < <(discover_adapters)
+    if [[ ${#available_adapters[@]} -eq 0 ]]; then
+        error "No adapters found in ${ADAPTERS_DIR}"
+        exit 1
+    fi
+
+    echo ""
+    echo "Available agents:"
+    echo "--------------------------------------------"
+    i=1
+    for adap in "${available_adapters[@]}"; do
+        # Load adapter temporarily to get its label
+        (
+            source "${ADAPTERS_DIR}/${adap}.sh"
+            echo "  ${i}) ${ADAPTER_LABEL} (${adap})"
+        )
+        ((i++)) || true
+    done
+    echo ""
+
+    # Get agent selection
+    while true; do
+        read -rp "Select agent [1-${#available_adapters[@]}]: " selection
+        if [[ "$selection" =~ ^[0-9]+$ ]] && (( selection >= 1 && selection <= ${#available_adapters[@]} )); then
+            break
+        fi
+        echo "Invalid selection. Enter a number between 1 and ${#available_adapters[@]}."
+    done
+
+    local selected_adapter="${available_adapters[$((selection - 1))]}"
+    load_adapter "$selected_adapter"
+    info "Selected agent: ${ADAPTER_LABEL} (${ADAPTER_NAME})"
 
     # Get destination path
     echo ""
@@ -444,13 +590,12 @@ do_install() {
     fi
 
     # Create destination structure
-    mkdir -p "${destination}/.opencode"
+    mkdir -p "${destination}/${CONFIG_DIR}"
     info "Destination: ${destination}"
 
     # Discover sub-sources
-    local sources_str
-    sources_str="$(discover_sub_sources "$project_dir")"
-    read -ra sub_sources <<< "$sources_str"
+    local sub_sources=()
+    mapfile -t sub_sources < <(discover_sub_sources "$project_dir")
 
     echo ""
     echo "Sub-sources (processed in order):"
@@ -462,7 +607,7 @@ do_install() {
     # Create staging directory
     local staging_dir
     staging_dir="$(mktemp -d)"
-    mkdir -p "${staging_dir}/.opencode"
+    mkdir -p "${staging_dir}/${CONFIG_DIR}"
     trap "rm -rf '${staging_dir}'" EXIT
 
     # Merge from each sub-source
@@ -471,22 +616,24 @@ do_install() {
         echo ""
         info "Processing sub-source: ${sub_source}"
 
-        # Merge .opencode/ subdirectories
-        for subdir in "${OPENCODE_SUBDIRS[@]}"; do
-            merge_opencode_subdir "$subdir" "$staging_dir" "$source_path" "$sub_source"
+        # Merge .agent/ subdirectories (only those supported by adapter)
+        for subdir in "${SUPPORTED_SUBDIRS[@]}"; do
+            merge_config_subdir "$subdir" "$staging_dir" "$source_path" "$sub_source"
         done
 
         # Merge root-level files
         merge_root_files "$staging_dir" "$source_path" "$sub_source"
     done
 
-    # Build manifest
+    # Transform settings and build manifest (order matters — manifest must reflect final filenames)
+    transform_staging_settings "$staging_dir"
+
     local manifest_json
     manifest_json="$(build_manifest "$staging_dir")"
 
     # Build sources JSON array
     local sources_json
-    sources_json="$(printf '%s\n' "${sub_sources[@]}" | jq -R . | jq -s .)"
+    sources_json="$(printf '%s\n' "${sub_sources[@]}" | jq -Rs 'split("\n") | map(select(. != ""))')"
 
     # Deploy to destination
     echo ""
@@ -495,27 +642,26 @@ do_install() {
     deploy_staging "$staging_dir" "$destination"
 
     # Record in registry
-    registry_add_entry "$project_type" "$destination" "$sources_json" "$manifest_json"
+    registry_add_entry "$project_type" "$destination" "$selected_adapter" "$sources_json" "$manifest_json"
     info "Recorded install in registry"
 
     # Summary
-    local file_count
-    file_count="$(echo "$manifest_json" | jq '. | length')"
     echo ""
     echo "============================================"
     echo " Install Complete"
     echo "============================================"
     echo "  Project type:  ${project_type}"
+    echo "  Agent:         ${ADAPTER_LABEL}"
     echo "  Destination:   ${destination}"
     echo "  Sub-sources:   ${sub_sources[*]}"
-    echo "  Files:         ${file_count}"
+    echo "  Files:         $(echo "$manifest_json" | jq 'length')"
     echo "============================================"
 }
 
 # ─── Main: Update mode ───────────────────────────────────────────────────────
 do_update() {
     echo "============================================"
-    echo " OpenCode Project Updater"
+    echo " AI Agent Project Updater"
     echo "============================================"
 
     registry_init
@@ -539,13 +685,20 @@ do_update() {
         local entry
         entry="$(jq ".installs[${idx}]" "$REGISTRY_FILE")"
 
-        local project destination old_manifest
-        project="$(echo "$entry" | jq -r '.project')"
-        destination="$(echo "$entry" | jq -r '.destination')"
-        old_manifest="$(echo "$entry" | jq -c '.manifest')"
+        local project destination adapter_name old_manifest
+        IFS=$'\t' read -r project destination adapter_name old_manifest <<< \
+            "$(echo "$entry" | jq -r --arg def "$DEFAULT_ADAPTER" '[.project, .destination, (.adapter // $def), (.manifest | @json)] | @tsv')"
 
         echo ""
-        info "Updating: ${destination} (project: ${project})"
+        info "Updating: ${destination} (project: ${project}, agent: ${adapter_name})"
+
+        # Load adapter for this install
+        if [[ ! -f "${ADAPTERS_DIR}/${adapter_name}.sh" ]]; then
+            error "Adapter '${adapter_name}' not found. Skipping."
+            ((failed++)) || true
+            continue
+        fi
+        load_adapter "$adapter_name"
 
         # Validate destination exists
         if [[ ! -d "$destination" ]]; then
@@ -556,8 +709,8 @@ do_update() {
             continue
         fi
 
-        if [[ ! -d "${destination}/.opencode" ]]; then
-            error "Destination '${destination}' has no .opencode/ directory. Skipping."
+        if [[ ! -d "${destination}/${CONFIG_DIR}" ]]; then
+            error "Destination '${destination}' has no ${CONFIG_DIR}/ directory. Skipping."
             echo "  The installed configuration appears to be missing."
             echo "  Use a fresh install instead of update."
             ((failed++)) || true
@@ -577,19 +730,18 @@ do_update() {
         # Step 2: Stage new merged content
         local staging_dir
         staging_dir="$(mktemp -d)"
-        mkdir -p "${staging_dir}/.opencode"
+        mkdir -p "${staging_dir}/${CONFIG_DIR}"
 
-        local sources_str
-        sources_str="$(discover_sub_sources "$project_dir")"
-        read -ra sub_sources <<< "$sources_str"
+        local sub_sources=()
+        mapfile -t sub_sources < <(discover_sub_sources "$project_dir")
 
         local merge_failed=false
         for sub_source in "${sub_sources[@]}"; do
             local source_path="${project_dir}/${sub_source}"
             info "  Merging sub-source: ${sub_source}"
 
-            for subdir in "${OPENCODE_SUBDIRS[@]}"; do
-                merge_opencode_subdir "$subdir" "$staging_dir" "$source_path" "$sub_source" || {
+            for subdir in "${SUPPORTED_SUBDIRS[@]}"; do
+                merge_config_subdir "$subdir" "$staging_dir" "$source_path" "$sub_source" || {
                     merge_failed=true
                     break 2
                 }
@@ -603,28 +755,31 @@ do_update() {
 
         if $merge_failed; then
             error "Merge failed for '${destination}'. Files were NOT deleted. Backup is at:"
-            error "  ${destination}/.opencode-backups/${TIMESTAMP}/"
+            error "  ${destination}/.agent-backups/${TIMESTAMP}/"
             rm -rf "$staging_dir"
             ((failed++)) || true
             continue
         fi
 
-        # Step 3: Build new manifest (before staging is removed)
+        # Step 3: Transform settings in staging
+        transform_staging_settings "$staging_dir"
+
+        # Step 4: Build new manifest (after transform)
         local new_manifest
         new_manifest="$(build_manifest "$staging_dir")"
 
-        # Step 4: Delete old installed files (surgical)
+        # Step 5: Delete old installed files (surgical)
         delete_installed_files "$destination" "$old_manifest"
 
-        # Step 5: Deploy new files
+        # Step 6: Deploy new files
         deploy_staging "$staging_dir" "$destination"
         rm -rf "$staging_dir"
 
-        # Step 6: Update registry
+        # Step 7: Update registry
         registry_update_entry "$destination" "$new_manifest"
 
         local file_count
-        file_count="$(echo "$new_manifest" | jq '. | length')"
+        file_count="$(echo "$new_manifest" | jq 'length')"
         info "Updated ${file_count} files at ${destination}"
         ((updated++)) || true
     done
