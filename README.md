@@ -1,5 +1,12 @@
 # AI Prompts
 
+> **Deprecated (September 2026).** This repository is no longer maintained. Its prompts,
+> skills, and installers have been replaced by `agent-fleet`, a private repository that
+> manages the shared instructions, skills, and agent settings on all of my machines. The
+> useful parts moved there: the coding rules became the `coding-rules` skill, and the
+> writing, Gmail, chat-summary, alerts-digest, and thinking-partner prompts became skills too.
+> The plan-then-execute workflow described below was retired. The content stays for reference.
+
 This repo exists because I kept doing the same things over and over in my AI-assisted coding sessions — and doing them inconsistently. Planning conversations that lost context. Execution runs that forgot what the planning phase decided. Decision records that lived only in chat history. So I codified the patterns that worked and threw away the ones that didn't.
 
 Everything here is built around [OpenCode](https://opencode.ai), which is what I use daily, and [Claude Code](https://docs.anthropic.com/en/docs/claude-code), which is also supported. But the ideas — the two-phase workflow, the separation of planning from execution, the obsessive context isolation — are tool-agnostic. The project installer uses an adapter system that can deploy to any AI agent, and adding support for a new one (Cursor, Aider, etc.) requires only a single adapter file.
